@@ -26,7 +26,7 @@ export default function GenericCategoryBreakdown({
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             {cat.displayName}
           </p>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             {entries.map((entry) => (
               <div key={entry._id} className="flex items-center gap-2">
                 <ScoreRing score={entry.categoryScores[cat.id] ?? 0} />

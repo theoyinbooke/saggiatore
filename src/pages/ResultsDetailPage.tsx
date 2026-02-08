@@ -220,19 +220,19 @@ function SessionListView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Scenario</TableHead>
+                <TableHead className="max-w-[140px] sm:max-w-none">Scenario</TableHead>
                 <TableHead>Model</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="hidden sm:table-cell">Status</TableHead>
                 <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("score")}>
                   Score <SortIcon column="score" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("turns")}>
+                <TableHead className="hidden md:table-cell cursor-pointer select-none text-right" onClick={() => handleSort("turns")}>
                   Turns <SortIcon column="turns" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("duration")}>
+                <TableHead className="hidden md:table-cell cursor-pointer select-none text-right" onClick={() => handleSort("duration")}>
                   Duration <SortIcon column="duration" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("date")}>
+                <TableHead className="hidden lg:table-cell cursor-pointer select-none text-right" onClick={() => handleSort("date")}>
                   Date <SortIcon column="date" />
                 </TableHead>
               </TableRow>
@@ -251,7 +251,7 @@ function SessionListView() {
                     className="cursor-pointer"
                     onClick={() => navigate(`/results/${session._id}`)}
                   >
-                    <TableCell className="max-w-[240px] truncate font-medium">
+                    <TableCell className="max-w-[140px] sm:max-w-[240px] truncate font-medium">
                       {scenario?.title ?? "Unknown scenario"}
                     </TableCell>
                     <TableCell>
@@ -262,7 +262,7 @@ function SessionListView() {
                         {getModelDisplayName(session.modelId)}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Badge variant={STATUS_VARIANTS[session.status]}>
                         {session.status}
                       </Badge>
@@ -276,13 +276,13 @@ function SessionListView() {
                         <span className="text-muted-foreground">&mdash;</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="hidden md:table-cell text-right tabular-nums">
                       {session.totalTurns}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="hidden md:table-cell text-right tabular-nums">
                       {fmtDuration(session.startedAt, session.completedAt)}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-right text-muted-foreground">
                       {fmtDate(session.startedAt)}
                     </TableCell>
                   </TableRow>
