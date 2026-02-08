@@ -22,7 +22,7 @@ export function TopBar() {
     location.pathname.startsWith("/shared");
 
   return (
-    <header className="flex items-center justify-between px-6 py-4">
+    <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/40 bg-background/95 px-6 py-4 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3">
         <IconScale size={22} className="text-primary" />
         <span className="text-lg font-semibold tracking-tight">
