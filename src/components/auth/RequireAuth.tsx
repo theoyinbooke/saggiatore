@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignIn } from "@clerk/clerk-react";
 import {
@@ -36,6 +37,8 @@ const VALUE_POINTS = [
 ];
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+
   return (
     <>
       <AuthLoading>
@@ -82,7 +85,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
           {/* Right — Clerk sign-in */}
           <div className="flex items-center justify-center">
-            <SignIn routing="hash" />
+            <SignIn routing="hash" fallbackRedirectUrl={location.pathname} />
           </div>
         </div>
       </Unauthenticated>
