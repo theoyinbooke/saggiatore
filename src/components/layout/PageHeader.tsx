@@ -17,14 +17,14 @@ export function PageHeader({ title, stats, action }: PageHeaderProps) {
     <div className="mb-8">
       <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       {(stats?.length || action) && (
-        <div className="mt-3 flex items-center gap-6 text-sm text-muted-foreground">
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
           {stats?.map((stat, i) => (
             <span key={i}>
               {stat.label}{" "}
               <span className="font-semibold text-foreground">{stat.value}</span>
             </span>
           ))}
-          {action && <div className="ml-auto flex items-center gap-3">{action}</div>}
+          {action && <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-3">{action}</div>}
         </div>
       )}
     </div>
