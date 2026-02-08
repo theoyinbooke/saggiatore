@@ -1,0 +1,252 @@
+[
+  {
+    "title": "H-1B Initial Filing for Software Engineer",
+    "category": "visa_application",
+    "complexity": "medium",
+    "description": "A software engineer from India needs guidance on the H-1B visa application process. The agent must explain the lottery system, employer sponsorship requirements, required documentation, prevailing wage determination, and timeline. The persona has a job offer but is unfamiliar with the H-1B process.",
+    "personaIndex": 0,
+    "expectedTools": ["check_visa_eligibility", "check_processing_times", "get_form_requirements", "verify_employer_sponsorship", "get_fee_schedule"],
+    "successCriteria": ["Correctly explains H-1B lottery and cap", "Identifies required forms (I-129, LCA)", "Mentions prevailing wage requirement", "Provides realistic processing timeline", "Addresses employer sponsorship requirements"],
+    "maxTurns": 12
+  },
+  {
+    "title": "O-1 Extraordinary Ability Visa for Film Director",
+    "category": "visa_application",
+    "complexity": "medium",
+    "description": "An award-winning film director from Czech Republic wants to understand the O-1B visa requirements for individuals with extraordinary ability in the arts. The agent must evaluate the persona's qualifications against the O-1 criteria and guide them on documentation strategy.",
+    "personaIndex": 14,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "verify_education_credentials"],
+    "successCriteria": ["Explains O-1B criteria for arts", "Evaluates persona's awards against standards", "Identifies advisory opinion requirement", "Discusses petition documentation strategy", "Mentions premium processing option"],
+    "maxTurns": 10
+  },
+  {
+    "title": "EB-2 National Interest Waiver Self-Petition",
+    "category": "visa_application",
+    "complexity": "high",
+    "description": "A data scientist from Nigeria wants to self-petition for an EB-2 National Interest Waiver. The agent must evaluate the case against the Dhanasar framework's three prongs and advise on evidence gathering and filing strategy without employer sponsorship.",
+    "personaIndex": 12,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "calculate_priority_date", "verify_education_credentials"],
+    "successCriteria": ["Explains Dhanasar framework three prongs", "Evaluates research as national interest", "Discusses self-petition advantage over PERM", "Identifies required evidence (publications, citations)", "Addresses maintaining H-1B during processing"],
+    "maxTurns": 12
+  },
+  {
+    "title": "E-2 Treaty Investor Visa Renewal",
+    "category": "visa_application",
+    "complexity": "low",
+    "description": "A South Korean business owner in New York wants to renew her E-2 treaty investor visa and understand the requirements. The agent should verify treaty eligibility, evaluate the business's qualifying investment, and explain the renewal process.",
+    "personaIndex": 8,
+    "expectedTools": ["check_e2_treaty_requirements", "check_treaty_investor_countries", "check_visa_eligibility", "get_form_requirements"],
+    "successCriteria": ["Confirms South Korea has E-2 treaty", "Explains substantiality of investment test", "Discusses marginality requirement", "Outlines renewal documentation", "Mentions E-2 to EB-5 pathway limitations"],
+    "maxTurns": 10
+  },
+  {
+    "title": "EB-5 Regional Center Investment Application",
+    "category": "visa_application",
+    "complexity": "medium",
+    "description": "A Russian businesswoman has invested in an EB-5 regional center project and needs guidance on the I-526E petition process, source of funds documentation, and timeline to conditional permanent residence.",
+    "personaIndex": 19,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "get_fee_schedule", "check_travel_restrictions"],
+    "successCriteria": ["Explains I-526E petition requirements", "Addresses source of funds documentation", "Discusses regional center due diligence", "Mentions conditional vs unconditional residency", "Provides realistic processing timeline"],
+    "maxTurns": 12
+  },
+  {
+    "title": "F-1 OPT to H-1B Cap-Gap Transition",
+    "category": "status_change",
+    "complexity": "low",
+    "description": "A Chinese PhD graduate on F-1 OPT needs guidance on transitioning to H-1B status. The agent must explain the cap-gap provision, STEM OPT extension as backup, and employer requirements for the H-1B petition.",
+    "personaIndex": 2,
+    "expectedTools": ["check_visa_eligibility", "check_work_authorization", "check_processing_times", "verify_employer_sponsorship", "get_form_requirements"],
+    "successCriteria": ["Explains H-1B cap-gap protection", "Discusses STEM OPT extension option", "Identifies lottery registration timeline", "Mentions employer E-Verify requirement for STEM OPT", "Addresses status gap risks"],
+    "maxTurns": 10
+  },
+  {
+    "title": "J-1 Waiver and H-1B Transition for Medical Researcher",
+    "category": "status_change",
+    "complexity": "medium",
+    "description": "An Egyptian medical researcher on a J-1 visa subject to the two-year home residency requirement needs to understand the waiver process to transition to H-1B status. The agent must explain waiver options and coordinate the transition timeline.",
+    "personaIndex": 9,
+    "expectedTools": ["check_visa_eligibility", "check_processing_times", "get_form_requirements", "check_travel_restrictions", "check_work_authorization"],
+    "successCriteria": ["Explains two-year home residency requirement", "Identifies waiver options (no-objection, IGA, persecution, hardship)", "Discusses no-objection statement from Egypt", "Addresses H-1B filing timeline after waiver", "Mentions Conrad 30 waiver for physicians if applicable"],
+    "maxTurns": 12
+  },
+  {
+    "title": "H-4 EAD Application and Work Authorization",
+    "category": "status_change",
+    "complexity": "medium",
+    "description": "An Indian woman on H-4 dependent status whose husband has an approved I-140 wants to apply for an H-4 EAD. The agent must explain eligibility, the application process, and address concerns about ongoing legal challenges to the H-4 EAD program.",
+    "personaIndex": 6,
+    "expectedTools": ["check_work_authorization", "get_form_requirements", "check_processing_times", "get_fee_schedule", "check_visa_eligibility"],
+    "successCriteria": ["Explains H-4 EAD eligibility based on I-140 approval", "Identifies required forms (I-765)", "Addresses program legal challenges honestly", "Discusses automatic extension provisions", "Mentions own H-1B as backup strategy"],
+    "maxTurns": 10
+  },
+  {
+    "title": "B-2 Overstay Adjustment Through Marriage",
+    "category": "status_change",
+    "complexity": "high",
+    "description": "A Brazilian woman who overstayed her B-2 visa by 14 months recently married a US citizen and wants to adjust status. The agent must navigate the complex intersection of unlawful presence, overstay, and immediate relative adjustment eligibility.",
+    "personaIndex": 15,
+    "expectedTools": ["check_visa_eligibility", "calculate_unlawful_presence", "get_form_requirements", "verify_marriage_validity", "check_processing_times"],
+    "successCriteria": ["Explains that immediate relatives can adjust despite overstay", "Calculates unlawful presence and bar implications", "Warns against leaving US (10-year bar would trigger)", "Discusses I-485 filing with I-130", "Addresses bona fide marriage evidence requirements"],
+    "maxTurns": 12
+  },
+  {
+    "title": "EB-2/EB-3 Downgrade Strategy for Long-Wait Applicant",
+    "category": "status_change",
+    "complexity": "high",
+    "description": "An Indian IT professional who has been waiting 12 years for an EB-2 India green card is exploring an EB-3 downgrade strategy while maintaining his EB-2 petition. The agent must explain priority date portability, dual filing strategy, and AC21 job portability.",
+    "personaIndex": 25,
+    "expectedTools": ["calculate_priority_date", "check_visa_eligibility", "check_processing_times", "check_work_authorization", "get_form_requirements"],
+    "successCriteria": ["Explains EB-2 vs EB-3 backlog comparison for India", "Discusses priority date retention across petitions", "Addresses AC21 portability after I-485 pending 180 days", "Identifies risks of job change during process", "Provides realistic timeline expectations"],
+    "maxTurns": 12
+  },
+  {
+    "title": "K-1 Fiance Visa Adjustment of Status",
+    "category": "family_immigration",
+    "complexity": "low",
+    "description": "A French woman on a K-1 fiance visa needs guidance on marrying within the 90-day window and filing for adjustment of status. The agent must explain the process, timeline, work authorization, and travel restrictions.",
+    "personaIndex": 24,
+    "expectedTools": ["get_form_requirements", "check_processing_times", "check_work_authorization", "check_travel_restrictions", "get_fee_schedule"],
+    "successCriteria": ["Emphasizes 90-day marriage deadline", "Explains I-485 concurrent filing with I-130", "Discusses EAD and advance parole applications", "Warns about travel before advance parole approval", "Provides processing timeline expectations"],
+    "maxTurns": 10
+  },
+  {
+    "title": "I-130 Spouse Petition for DACA Recipient",
+    "category": "family_immigration",
+    "complexity": "high",
+    "description": "A DACA recipient whose US citizen fiance wants to petition for her faces complications from unlawful presence accrued before DACA and the interaction between DACA and marriage-based adjustment. The agent must navigate these intersecting issues.",
+    "personaIndex": 1,
+    "expectedTools": ["check_visa_eligibility", "calculate_unlawful_presence", "get_form_requirements", "verify_marriage_validity", "check_processing_times"],
+    "successCriteria": ["Addresses DACA and adjustment of status interaction", "Explains unlawful presence issues from pre-DACA period", "Discusses whether consular processing needed", "Identifies I-601A provisional waiver if applicable", "Considers impact on DACA renewal during process"],
+    "maxTurns": 12
+  },
+  {
+    "title": "F4 Sibling Petition with Extended Wait Times",
+    "category": "family_immigration",
+    "complexity": "low",
+    "description": "A US citizen wants to petition for her sibling in Vietnam through the F4 family preference category. The agent must explain the extremely long wait times, filing process, and what happens during the multi-decade wait.",
+    "personaIndex": 20,
+    "expectedTools": ["get_form_requirements", "calculate_priority_date", "check_processing_times", "get_fee_schedule", "get_embassy_wait_times"],
+    "successCriteria": ["Explains F4 category and priority date system", "Provides realistic wait time (20+ years for Vietnam)", "Discusses National Visa Center processing", "Explains what beneficiary can and cannot do during wait", "Addresses aging-out risks for any derivative beneficiaries"],
+    "maxTurns": 10
+  },
+  {
+    "title": "Child Aging Out Protection Under CSPA",
+    "category": "family_immigration",
+    "complexity": "high",
+    "description": "A U visa applicant is worried about her 17-year-old child aging out of derivative status given the massive U visa backlog. The agent must explain CSPA protections, calculate aging-out risk, and identify protective measures.",
+    "personaIndex": 11,
+    "expectedTools": ["check_aging_out_risk", "check_processing_times", "check_visa_eligibility", "get_form_requirements"],
+    "successCriteria": ["Explains Child Status Protection Act provisions", "Calculates child's CSPA age", "Identifies risk given U visa backlog timeline", "Discusses protective measures available", "Considers independent filing options for the child"],
+    "maxTurns": 12
+  },
+  {
+    "title": "TPS Holder Adjustment Through US Citizen Spouse",
+    "category": "family_immigration",
+    "complexity": "medium",
+    "description": "A Salvadoran TPS holder who entered without inspection wants to adjust status through his US citizen wife. The agent must navigate the complex interaction of TPS, entry without inspection, and marriage-based adjustment.",
+    "personaIndex": 5,
+    "expectedTools": ["check_visa_eligibility", "calculate_unlawful_presence", "get_form_requirements", "check_processing_times", "verify_marriage_validity"],
+    "successCriteria": ["Explains TPS as lawful status for adjustment purposes", "Addresses entry without inspection complications", "Discusses whether TPS constitutes an inspection and admission", "Identifies I-601A provisional waiver if needed", "Explains 6th Circuit vs other circuit split on TPS adjustment"],
+    "maxTurns": 12
+  },
+  {
+    "title": "Cancellation of Removal for Non-Permanent Resident",
+    "category": "deportation_defense",
+    "complexity": "high",
+    "description": "A Honduran mother in removal proceedings needs to pursue cancellation of removal. The agent must evaluate her eligibility under the four requirements including 10 years continuous presence and exceptional hardship to her US citizen children.",
+    "personaIndex": 22,
+    "expectedTools": ["check_visa_eligibility", "lookup_immigration_judge_stats", "check_bond_eligibility", "get_form_requirements", "get_interpreter_services"],
+    "successCriteria": ["Explains four requirements for cancellation of removal", "Evaluates 10-year continuous presence", "Discusses exceptional and extremely unusual hardship standard", "Identifies evidence needed for hardship claim", "Addresses the 4,000 annual cap on grants"],
+    "maxTurns": 14
+  },
+  {
+    "title": "Defensive Asylum Claim from Detention",
+    "category": "deportation_defense",
+    "complexity": "high",
+    "description": "A Nigerian political activist in immigration detention passed his credible fear interview and needs to pursue a defensive asylum claim in immigration court. The agent must guide him on bond, rights in detention, and asylum case preparation.",
+    "personaIndex": 29,
+    "expectedTools": ["check_asylum_eligibility", "check_bond_eligibility", "get_country_conditions", "lookup_immigration_judge_stats", "get_interpreter_services"],
+    "successCriteria": ["Explains defensive asylum process in immigration court", "Addresses bond hearing strategy", "Discusses evidence needed for political persecution claim", "Identifies country conditions resources for Nigeria", "Explains rights while in detention"],
+    "maxTurns": 14
+  },
+  {
+    "title": "Bond Hearing Strategy for Detained Asylum Seeker",
+    "category": "deportation_defense",
+    "complexity": "medium",
+    "description": "A detained asylum seeker needs guidance on requesting a bond hearing before an immigration judge. The agent must explain bond eligibility, factors judges consider, and how to present the strongest case for release.",
+    "personaIndex": 29,
+    "expectedTools": ["check_bond_eligibility", "lookup_immigration_judge_stats", "check_asylum_eligibility", "get_form_requirements"],
+    "successCriteria": ["Explains bond eligibility requirements", "Distinguishes mandatory vs discretionary detention", "Identifies factors favoring bond (community ties, no flight risk)", "Discusses typical bond amounts", "Addresses right to bond redetermination"],
+    "maxTurns": 10
+  },
+  {
+    "title": "TPS Termination Contingency Planning",
+    "category": "deportation_defense",
+    "complexity": "high",
+    "description": "A Haitian TPS holder of 15 years faces potential TPS termination and needs to understand all available options if TPS ends, including cancellation of removal, voluntary departure, and other forms of relief.",
+    "personaIndex": 7,
+    "expectedTools": ["check_visa_eligibility", "calculate_unlawful_presence", "check_bond_eligibility", "lookup_immigration_judge_stats", "get_form_requirements"],
+    "successCriteria": ["Explains consequences if TPS is terminated", "Evaluates cancellation of removal eligibility", "Discusses voluntary departure option", "Identifies any other relief available", "Addresses protecting business and family during proceedings"],
+    "maxTurns": 12
+  },
+  {
+    "title": "Voluntary Departure vs Fighting Removal",
+    "category": "deportation_defense",
+    "complexity": "medium",
+    "description": "A person in removal proceedings needs to understand the strategic choice between accepting voluntary departure and fighting the case through removal proceedings. The agent must explain the benefits, risks, and immigration consequences of each option.",
+    "personaIndex": 22,
+    "expectedTools": ["check_visa_eligibility", "calculate_unlawful_presence", "lookup_immigration_judge_stats", "check_criminal_inadmissibility"],
+    "successCriteria": ["Explains voluntary departure requirements and benefits", "Contrasts with consequences of removal order", "Discusses 3/10 year bars vs permanent bar", "Addresses ability to return after voluntary departure", "Considers strength of relief claims before choosing"],
+    "maxTurns": 10
+  },
+  {
+    "title": "Affirmative Asylum Application for LGBTQ+ Applicant",
+    "category": "humanitarian",
+    "complexity": "medium",
+    "description": "An Iranian LGBTQ+ activist granted asylum wants guidance on adjusting to permanent resident status after one year as an asylee. The agent must explain the asylee adjustment process and eventually petitioning for his partner.",
+    "personaIndex": 16,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "get_fee_schedule", "check_travel_restrictions"],
+    "successCriteria": ["Explains one-year asylee adjustment eligibility", "Identifies required forms (I-485 for asylee)", "Discusses derivative benefits for partner", "Addresses travel with refugee travel document", "Provides realistic processing timeline"],
+    "maxTurns": 10
+  },
+  {
+    "title": "TPS Application for Ukrainian Parolee",
+    "category": "humanitarian",
+    "complexity": "medium",
+    "description": "A Ukrainian who arrived through the Uniting for Ukraine parole program wants to apply for TPS and explore longer-term immigration options. The agent must explain TPS eligibility, the relationship between parole and TPS, and potential asylum filing.",
+    "personaIndex": 23,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "get_humanitarian_parole_info", "get_country_conditions"],
+    "successCriteria": ["Explains TPS eligibility for Ukrainian nationals", "Distinguishes parole from TPS status", "Discusses concurrent asylum filing strategy", "Addresses work authorization under TPS", "Identifies credential evaluation for employment"],
+    "maxTurns": 12
+  },
+  {
+    "title": "U Visa Application for Domestic Violence Survivor",
+    "category": "humanitarian",
+    "complexity": "high",
+    "description": "A Colombian domestic violence survivor with a pending U visa application needs guidance on the massive backlog, work authorization while waiting, and protecting her children from aging out. The agent must also discuss VAWA as a parallel pathway.",
+    "personaIndex": 11,
+    "expectedTools": ["check_visa_eligibility", "check_processing_times", "check_work_authorization", "check_aging_out_risk", "get_form_requirements"],
+    "successCriteria": ["Explains U visa backlog and bona fide determination", "Discusses work authorization with pending U visa", "Addresses children's derivative status and aging out", "Explains VAWA self-petition as alternative", "Provides safety planning resources"],
+    "maxTurns": 12
+  },
+  {
+    "title": "VAWA Self-Petition for Abused Spouse",
+    "category": "humanitarian",
+    "complexity": "high",
+    "description": "A Venezuelan TPS holder who experienced domestic violence from her US citizen husband wants to file a VAWA self-petition. The agent must navigate the intersection of TPS and VAWA, explain confidentiality protections, and guide on evidence gathering.",
+    "personaIndex": 26,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "check_work_authorization", "get_fee_schedule"],
+    "successCriteria": ["Explains VAWA self-petition eligibility requirements", "Discusses evidence of battery or extreme cruelty", "Addresses confidentiality protections (no notice to abuser)", "Explains interaction between TPS and VAWA", "Identifies path to permanent residence through VAWA"],
+    "maxTurns": 12
+  },
+  {
+    "title": "Special Immigrant Juvenile Status for Aging-Out Youth",
+    "category": "humanitarian",
+    "complexity": "high",
+    "description": "A Guatemalan young man who entered as an unaccompanied minor is pursuing SIJS but is worried about aging out at 21. The agent must explain SIJS requirements, TVPRA protections, and how to coordinate juvenile court findings with USCIS filing.",
+    "personaIndex": 18,
+    "expectedTools": ["check_visa_eligibility", "get_form_requirements", "check_processing_times", "check_aging_out_risk", "check_work_authorization"],
+    "successCriteria": ["Explains SIJS eligibility requirements", "Addresses TVPRA age-out protections", "Discusses juvenile court findings needed", "Explains I-360 and I-485 concurrent filing", "Addresses impact of removal proceedings on SIJS"],
+    "maxTurns": 14
+  }
+]

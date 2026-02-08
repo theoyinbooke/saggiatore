@@ -1,0 +1,388 @@
+[
+  {
+    "name": "check_visa_eligibility",
+    "description": "Determines whether an applicant meets the basic eligibility requirements for a specific visa category based on their profile information.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "visa_type", "type": "string", "description": "The visa category to check eligibility for (e.g., H-1B, O-1, EB-2, K-1)", "required": true },
+      { "name": "nationality", "type": "string", "description": "Applicant's country of citizenship", "required": true },
+      { "name": "education_level", "type": "string", "description": "Highest education level (e.g., bachelor, master, doctorate)", "required": false },
+      { "name": "years_experience", "type": "number", "description": "Years of relevant work experience", "required": false },
+      { "name": "current_status", "type": "string", "description": "Current immigration status in the US", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Eligibility determination with boolean eligible flag, list of met/unmet requirements, and recommended next steps."
+  },
+  {
+    "name": "check_processing_times",
+    "description": "Retrieves current USCIS processing times for a specific form type at a given service center or field office.",
+    "category": "processing",
+    "parameters": [
+      { "name": "form_number", "type": "string", "description": "USCIS form number (e.g., I-130, I-485, I-140)", "required": true },
+      { "name": "service_center", "type": "string", "description": "USCIS service center or field office name", "required": false },
+      { "name": "category", "type": "string", "description": "Specific category or classification within the form", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Processing time range (estimated months), last updated date, and service center information."
+  },
+  {
+    "name": "get_form_requirements",
+    "description": "Returns the required documents, fees, and supporting evidence needed to file a specific USCIS form.",
+    "category": "forms",
+    "parameters": [
+      { "name": "form_number", "type": "string", "description": "USCIS form number (e.g., I-130, I-485, I-765)", "required": true },
+      { "name": "filing_category", "type": "string", "description": "Specific filing category or basis", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "List of required documents, filing fee amount, supporting evidence checklist, and filing instructions."
+  },
+  {
+    "name": "lookup_uscis_office",
+    "description": "Finds the nearest USCIS field office or application support center based on zip code or city.",
+    "category": "status",
+    "parameters": [
+      { "name": "zip_code", "type": "string", "description": "US zip code for location-based lookup", "required": false },
+      { "name": "city", "type": "string", "description": "City name for location-based lookup", "required": false },
+      { "name": "state", "type": "string", "description": "State abbreviation", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Office name, address, phone number, hours of operation, and services available."
+  },
+  {
+    "name": "calculate_priority_date",
+    "description": "Checks the current visa bulletin to determine whether a given priority date is current for a specific preference category and country of chargeability.",
+    "category": "processing",
+    "parameters": [
+      { "name": "preference_category", "type": "string", "description": "Employment or family preference category (e.g., EB-2, EB-3, F1, F2A)", "required": true },
+      { "name": "country_of_chargeability", "type": "string", "description": "Country of birth for visa allocation purposes", "required": true },
+      { "name": "priority_date", "type": "string", "description": "The applicant's priority date (YYYY-MM-DD format)", "required": true }
+    ],
+    "returnType": "object",
+    "returnDescription": "Whether date is current, current cutoff date, estimated wait time, and filing date vs final action date."
+  },
+  {
+    "name": "check_travel_restrictions",
+    "description": "Checks whether an applicant can travel outside the US given their current immigration status and pending applications.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "current_status", "type": "string", "description": "Current immigration status (e.g., H-1B, F-1, pending AOS)", "required": true },
+      { "name": "pending_applications", "type": "string", "description": "Comma-separated list of pending USCIS applications", "required": false },
+      { "name": "has_advance_parole", "type": "boolean", "description": "Whether the applicant has an approved advance parole document", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Travel advisory with risk level, required documents for reentry, and potential consequences of travel."
+  },
+  {
+    "name": "verify_employer_sponsorship",
+    "description": "Verifies whether an employer meets the requirements to sponsor a foreign worker for a specific visa or green card category.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "employer_name", "type": "string", "description": "Name of the sponsoring employer", "required": true },
+      { "name": "visa_type", "type": "string", "description": "Visa or green card category being sponsored", "required": true },
+      { "name": "employer_ein", "type": "string", "description": "Employer Identification Number", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Employer verification status, H-1B dependency status, prior petition history, and any compliance issues."
+  },
+  {
+    "name": "check_public_charge_rule",
+    "description": "Evaluates whether an applicant may be subject to public charge inadmissibility based on their financial profile and benefit usage.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "annual_income", "type": "number", "description": "Applicant's annual household income in USD", "required": true },
+      { "name": "household_size", "type": "number", "description": "Number of people in the household", "required": true },
+      { "name": "benefits_received", "type": "string", "description": "Comma-separated list of public benefits received", "required": false },
+      { "name": "visa_category", "type": "string", "description": "Visa category being applied for", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Public charge risk assessment, poverty guideline comparison, exempt categories, and I-864 affidavit requirements."
+  },
+  {
+    "name": "get_country_conditions",
+    "description": "Retrieves current country conditions reports relevant to asylum and protection claims, including human rights data and State Department advisories.",
+    "category": "humanitarian",
+    "parameters": [
+      { "name": "country", "type": "string", "description": "Country name to retrieve conditions for", "required": true },
+      { "name": "persecution_type", "type": "string", "description": "Type of persecution (e.g., political, religious, ethnic, gender-based, LGBTQ)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Country conditions summary, relevant human rights reports, travel advisories, and TPS/DED designations if any."
+  },
+  {
+    "name": "check_asylum_eligibility",
+    "description": "Evaluates basic asylum eligibility based on the applicant's claim, including the one-year filing deadline and bars to asylum.",
+    "category": "humanitarian",
+    "parameters": [
+      { "name": "entry_date", "type": "string", "description": "Date of last entry into the US (YYYY-MM-DD)", "required": true },
+      { "name": "persecution_ground", "type": "string", "description": "Protected ground (race, religion, nationality, political opinion, particular social group)", "required": true },
+      { "name": "country_of_origin", "type": "string", "description": "Applicant's country of origin", "required": true },
+      { "name": "prior_filings", "type": "boolean", "description": "Whether applicant has filed asylum before", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Eligibility assessment, one-year deadline status, potential bars to asylum, and recommended filing strategy."
+  },
+  {
+    "name": "check_e2_treaty_requirements",
+    "description": "Checks whether a country has an E-2 treaty with the US and the specific investment requirements for E-2 treaty investor visa.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "nationality", "type": "string", "description": "Applicant's country of citizenship", "required": true },
+      { "name": "investment_amount", "type": "number", "description": "Planned investment amount in USD", "required": false },
+      { "name": "business_type", "type": "string", "description": "Type of business being invested in", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Treaty status, investment sufficiency assessment, marginality analysis, and E-2 specific requirements."
+  },
+  {
+    "name": "check_citizenship_derivation",
+    "description": "Determines whether a person may have derived or acquired US citizenship automatically through a parent who is a US citizen.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "birth_date", "type": "string", "description": "Applicant's date of birth (YYYY-MM-DD)", "required": true },
+      { "name": "parent_citizenship_date", "type": "string", "description": "Date parent became US citizen (YYYY-MM-DD)", "required": true },
+      { "name": "parent_relationship", "type": "string", "description": "Relationship to citizen parent (mother/father)", "required": true },
+      { "name": "in_legal_custody", "type": "boolean", "description": "Whether the child was in the citizen parent's legal and physical custody", "required": true }
+    ],
+    "returnType": "object",
+    "returnDescription": "Derivation analysis under INA 320/321, applicable law based on dates, and whether citizenship was automatically acquired."
+  },
+  {
+    "name": "get_fee_schedule",
+    "description": "Returns the current USCIS filing fees for a specific form, including any biometrics fees and fee waiver eligibility.",
+    "category": "financial",
+    "parameters": [
+      { "name": "form_number", "type": "string", "description": "USCIS form number", "required": true },
+      { "name": "filing_category", "type": "string", "description": "Specific filing category if fees vary", "required": false },
+      { "name": "fee_waiver_eligible", "type": "boolean", "description": "Whether to check fee waiver eligibility", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Filing fee amount, biometrics fee, total cost, fee waiver eligibility criteria, and payment methods accepted."
+  },
+  {
+    "name": "check_work_authorization",
+    "description": "Determines what type of work authorization an applicant currently has or is eligible for based on their immigration status.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "current_status", "type": "string", "description": "Current immigration status", "required": true },
+      { "name": "pending_applications", "type": "string", "description": "Comma-separated list of pending applications", "required": false },
+      { "name": "ead_category", "type": "string", "description": "EAD category code if applicable (e.g., C09, C10, A05)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Current work authorization status, EAD eligibility, automatic extensions if applicable, and restrictions."
+  },
+  {
+    "name": "lookup_immigration_judge_stats",
+    "description": "Retrieves statistics for an immigration judge including grant rates for asylum, cancellation of removal, and other forms of relief.",
+    "category": "legal",
+    "parameters": [
+      { "name": "judge_name", "type": "string", "description": "Name of the immigration judge", "required": false },
+      { "name": "court_location", "type": "string", "description": "Immigration court city or state", "required": false },
+      { "name": "relief_type", "type": "string", "description": "Type of relief (e.g., asylum, cancellation, withholding)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Judge's grant/denial rates by relief type, average case completion time, and court backlog statistics."
+  },
+  {
+    "name": "get_interpreter_services",
+    "description": "Finds interpreter and translation services available for immigration proceedings and USCIS interviews.",
+    "category": "legal",
+    "parameters": [
+      { "name": "language", "type": "string", "description": "Language needed for interpretation", "required": true },
+      { "name": "location", "type": "string", "description": "City or state where services are needed", "required": false },
+      { "name": "service_type", "type": "string", "description": "Type of service (court interpreter, document translation, USCIS interview)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Available interpreter services, estimated costs, certified translator listings, and pro bono options."
+  },
+  {
+    "name": "check_bond_eligibility",
+    "description": "Determines whether a detained individual is eligible for bond in immigration proceedings and estimates likely bond amounts.",
+    "category": "legal",
+    "parameters": [
+      { "name": "detention_basis", "type": "string", "description": "Legal basis for detention (e.g., INA 236(a), INA 236(c) mandatory)", "required": true },
+      { "name": "criminal_history", "type": "string", "description": "Summary of any criminal convictions", "required": false },
+      { "name": "flight_risk_factors", "type": "string", "description": "Factors relevant to flight risk assessment", "required": false },
+      { "name": "community_ties", "type": "string", "description": "Community ties in the US (family, employment, property)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Bond eligibility determination, estimated bond range, mandatory detention assessment, and factors favoring release."
+  },
+  {
+    "name": "verify_marriage_validity",
+    "description": "Checks whether a marriage is likely to be recognized as valid for immigration purposes based on jurisdiction and circumstances.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "marriage_jurisdiction", "type": "string", "description": "State or country where marriage was performed", "required": true },
+      { "name": "marriage_date", "type": "string", "description": "Date of marriage (YYYY-MM-DD)", "required": true },
+      { "name": "prior_marriages", "type": "boolean", "description": "Whether either spouse has prior marriages", "required": false },
+      { "name": "marriage_type", "type": "string", "description": "Type of marriage (civil, religious, proxy, common law)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Marriage validity assessment for immigration purposes, potential red flags, and documentation needed to prove bona fide marriage."
+  },
+  {
+    "name": "check_aging_out_risk",
+    "description": "Calculates whether a child beneficiary is at risk of aging out of eligibility under the Child Status Protection Act (CSPA).",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "child_birth_date", "type": "string", "description": "Child's date of birth (YYYY-MM-DD)", "required": true },
+      { "name": "petition_filing_date", "type": "string", "description": "Date the underlying petition was filed (YYYY-MM-DD)", "required": true },
+      { "name": "visa_category", "type": "string", "description": "Visa preference category", "required": true },
+      { "name": "priority_date_current", "type": "boolean", "description": "Whether the priority date is currently current", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "CSPA age calculation, aging out risk assessment, estimated time until priority date is current, and protective measures available."
+  },
+  {
+    "name": "calculate_unlawful_presence",
+    "description": "Calculates the total days of unlawful presence accrued and determines whether the 3-year or 10-year inadmissibility bars have been triggered.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "status_expiry_date", "type": "string", "description": "Date authorized status expired (YYYY-MM-DD)", "required": true },
+      { "name": "departure_date", "type": "string", "description": "Date of departure from US if applicable (YYYY-MM-DD)", "required": false },
+      { "name": "current_date", "type": "string", "description": "Current date for calculation (YYYY-MM-DD)", "required": false },
+      { "name": "exceptions", "type": "string", "description": "Any applicable exceptions (e.g., under 18, pending asylum, VAWA)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Total days of unlawful presence, applicable bars (3-year, 10-year, permanent), exceptions that may apply, and waiver eligibility."
+  },
+  {
+    "name": "get_embassy_wait_times",
+    "description": "Retrieves current wait times for visa interview appointments at US embassies and consulates worldwide.",
+    "category": "processing",
+    "parameters": [
+      { "name": "country", "type": "string", "description": "Country where embassy/consulate is located", "required": true },
+      { "name": "city", "type": "string", "description": "City of the embassy or consulate", "required": false },
+      { "name": "visa_type", "type": "string", "description": "Type of visa appointment (immigrant, non-immigrant)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Current wait times for interview appointments, nearest available dates, and alternative embassy options."
+  },
+  {
+    "name": "check_vaccine_requirements",
+    "description": "Returns the required vaccinations for immigration medical exams (Form I-693) based on applicant age and visa category.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "applicant_age", "type": "number", "description": "Applicant's current age", "required": true },
+      { "name": "visa_category", "type": "string", "description": "Visa or adjustment category", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Required vaccinations list, age-based exemptions, medical exam instructions, and I-693 validity period."
+  },
+  {
+    "name": "verify_military_service_eligibility",
+    "description": "Checks whether a non-citizen is eligible for US military service and any immigration benefits available through military service.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "current_status", "type": "string", "description": "Current immigration status", "required": true },
+      { "name": "age", "type": "number", "description": "Applicant's age", "required": true },
+      { "name": "branch", "type": "string", "description": "Military branch of interest", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Military service eligibility, MAVNI program status, expedited naturalization eligibility, and parole-in-place options for family."
+  },
+  {
+    "name": "check_criminal_inadmissibility",
+    "description": "Analyzes whether criminal convictions make an applicant inadmissible and identifies potential waivers.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "convictions", "type": "string", "description": "Description of criminal convictions with dates and sentences", "required": true },
+      { "name": "visa_category", "type": "string", "description": "Visa category being applied for", "required": false },
+      { "name": "years_since_conviction", "type": "number", "description": "Years since most recent conviction", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Inadmissibility analysis, applicable grounds (CIMT, aggravated felony, controlled substance), available waivers, and petty offense exception."
+  },
+  {
+    "name": "get_poverty_guidelines",
+    "description": "Returns current federal poverty guidelines for I-864 Affidavit of Support income requirements based on household size and state.",
+    "category": "financial",
+    "parameters": [
+      { "name": "household_size", "type": "number", "description": "Total household size including sponsor, dependents, and intending immigrants", "required": true },
+      { "name": "state", "type": "string", "description": "State of residence (for Alaska and Hawaii different guidelines apply)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Poverty guideline amount, 125% threshold for I-864, asset calculation rules, and joint sponsor requirements if income insufficient."
+  },
+  {
+    "name": "lookup_approved_labor_certifications",
+    "description": "Looks up information about PERM labor certification applications including processing times and prevailing wage data.",
+    "category": "processing",
+    "parameters": [
+      { "name": "job_title", "type": "string", "description": "Job title for the PERM application", "required": false },
+      { "name": "soc_code", "type": "string", "description": "Standard Occupational Classification code", "required": false },
+      { "name": "state", "type": "string", "description": "State where the job is located", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "PERM processing times, prevailing wage ranges by level, audit rates, and common grounds for denial."
+  },
+  {
+    "name": "check_dual_citizenship_rules",
+    "description": "Provides information about dual citizenship rules for a specific country and whether naturalizing in the US would affect citizenship in the home country.",
+    "category": "legal",
+    "parameters": [
+      { "name": "country", "type": "string", "description": "Country of current citizenship", "required": true }
+    ],
+    "returnType": "object",
+    "returnDescription": "Whether the country allows dual citizenship, any restrictions or requirements, oath of allegiance implications, and tax considerations."
+  },
+  {
+    "name": "get_naturalization_requirements",
+    "description": "Returns the eligibility requirements for US naturalization including continuous residence, physical presence, and good moral character.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "basis", "type": "string", "description": "Basis for naturalization (5-year LPR, 3-year marriage to USC, military)", "required": true },
+      { "name": "green_card_date", "type": "string", "description": "Date permanent residence was granted (YYYY-MM-DD)", "required": true },
+      { "name": "absences", "type": "string", "description": "Summary of absences from the US during statutory period", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Eligibility checklist, earliest filing date, continuous residence analysis, physical presence calculation, and exam requirements."
+  },
+  {
+    "name": "check_reentry_permit_eligibility",
+    "description": "Determines whether a permanent resident needs a reentry permit for planned travel abroad and the application process.",
+    "category": "compliance",
+    "parameters": [
+      { "name": "planned_absence_months", "type": "number", "description": "Planned duration of absence in months", "required": true },
+      { "name": "previous_absences", "type": "string", "description": "Summary of prior extended absences", "required": false },
+      { "name": "green_card_date", "type": "string", "description": "Date of obtaining permanent residence", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Reentry permit necessity assessment, application process, validity period, and risk of abandonment of permanent residence."
+  },
+  {
+    "name": "verify_education_credentials",
+    "description": "Provides guidance on getting foreign education credentials evaluated for US immigration purposes.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "country_of_education", "type": "string", "description": "Country where education was obtained", "required": true },
+      { "name": "degree_type", "type": "string", "description": "Type of degree or credential", "required": true },
+      { "name": "purpose", "type": "string", "description": "Purpose of evaluation (H-1B, EB-2, EB-3, licensure)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Recommended credential evaluation agencies (NACES members), US degree equivalency, and specific requirements by visa category."
+  },
+  {
+    "name": "check_treaty_investor_countries",
+    "description": "Returns the list of countries that have E-1 treaty trader or E-2 treaty investor agreements with the United States.",
+    "category": "eligibility",
+    "parameters": [
+      { "name": "treaty_type", "type": "string", "description": "Type of treaty to check (E-1, E-2, or both)", "required": true },
+      { "name": "nationality", "type": "string", "description": "Specific nationality to check treaty status for", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Treaty status for the specified country, list of treaty countries if no specific nationality given, and treaty-specific requirements."
+  },
+  {
+    "name": "get_humanitarian_parole_info",
+    "description": "Provides information about humanitarian parole programs, eligibility criteria, and application process for urgent humanitarian reasons.",
+    "category": "humanitarian",
+    "parameters": [
+      { "name": "country_of_origin", "type": "string", "description": "Applicant's country of origin", "required": true },
+      { "name": "urgency_basis", "type": "string", "description": "Basis for humanitarian urgency (medical, family reunification, conflict)", "required": false },
+      { "name": "program_name", "type": "string", "description": "Specific parole program if applicable (e.g., Uniting for Ukraine, CHNV)", "required": false }
+    ],
+    "returnType": "object",
+    "returnDescription": "Available parole programs, eligibility requirements, application process, duration of parole, and follow-up immigration options."
+  }
+]
