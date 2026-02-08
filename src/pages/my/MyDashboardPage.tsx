@@ -5,12 +5,14 @@ import { api } from "../../../convex/_generated/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconCheck } from "@tabler/icons-react";
 import { useUser } from "@clerk/clerk-react";
 import type { CustomEvaluation } from "@/lib/types";
 import EvaluationCard from "@/components/my/EvaluationCard";
 import CreateEvaluationModal from "@/pages/my/MyCreatePage";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { getGalileoKey } from "@/lib/galileoKey";
+import OnboardingGuide from "@/components/my/OnboardingGuide";
 
 export default function MyDashboardPage() {
   const navigate = useNavigate();
@@ -18,6 +20,13 @@ export default function MyDashboardPage() {
   const deleteEval = useMutation(api.customEvaluations.deleteEvaluation);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [hasKey, setHasKey] = useState(() => !!getGalileoKey());
+
+  // Always call hooks unconditionally — skip the query when there's no key
+  const rawEvaluations = useQuery(
+    api.customEvaluations.listByUser,
+    hasKey && user ? { userId: user.id } : "skip"
+  );
 
   function handleDelete(id: string) {
     setDeleteTarget(id);
@@ -30,10 +39,10 @@ export default function MyDashboardPage() {
     }
   }
 
-  const rawEvaluations = useQuery(
-    api.customEvaluations.listByUser,
-    user ? { userId: user.id } : "skip"
-  );
+  // Show onboarding when no API key is configured
+  if (!hasKey) {
+    return <OnboardingGuide onKeySubmitted={() => setHasKey(true)} />;
+  }
 
   // Show a stable loading state while the query resolves,
   // instead of flashing mock data then switching to real data.
@@ -75,15 +84,19 @@ export default function MyDashboardPage() {
       {evaluations.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-16">
-            <p className="text-lg font-medium text-muted-foreground">
-              No evaluations yet
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <IconCheck className="h-6 w-6 text-green-600" />
+            </div>
+            <p className="text-lg font-medium">
+              Your API key is configured
             </p>
-            <p className="text-sm text-muted-foreground">
-              Create your first custom evaluation to get started.
+            <p className="max-w-sm text-center text-sm text-muted-foreground">
+              You're all set! Create your first evaluation to start
+              benchmarking models.
             </p>
             <Button onClick={() => setShowCreate(true)} className="gap-1.5">
               <IconPlus className="h-4 w-4" />
-              Create Evaluation
+              Create Your First Evaluation
             </Button>
           </CardContent>
         </Card>
