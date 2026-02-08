@@ -5,6 +5,7 @@ import {
   IconPlayerPlay,
   IconChartBar,
   IconSettings,
+  IconArticle,
 } from "@tabler/icons-react";
 import {
   Tooltip,
@@ -20,6 +21,7 @@ const navItems = [
   { path: "/personas", icon: IconUsers, label: "Personas", adminOnly: false },
   { path: "/runner", icon: IconPlayerPlay, label: "Runner", adminOnly: true },
   { path: "/results", icon: IconChartBar, label: "Results", adminOnly: false },
+  { path: "/blog", icon: IconArticle, label: "Blog", adminOnly: false },
   { path: "/settings", icon: IconSettings, label: "Settings", adminOnly: true },
 ];
 
