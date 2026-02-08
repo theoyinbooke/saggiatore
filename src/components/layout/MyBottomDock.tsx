@@ -3,6 +3,7 @@ import {
   IconLayoutDashboard,
   IconPlus,
   IconSettings,
+  IconArticle,
 } from "@tabler/icons-react";
 import {
   Tooltip,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { path: "/my", icon: IconLayoutDashboard, label: "Evaluations" },
   { path: "/my/create", icon: IconPlus, label: "Create" },
+  { path: "/blog", icon: IconArticle, label: "Blog" },
   { path: "/my/settings", icon: IconSettings, label: "Settings" },
 ];
 
