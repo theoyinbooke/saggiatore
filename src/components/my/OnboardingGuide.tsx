@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { IconEye, IconEyeOff, IconCheck, IconExternalLink } from "@tabler/icons-react";
 import { setGalileoKey } from "@/lib/galileoKey";
 
-const GALILEO_SIGNUP_URL = "https://app.rungalileo.io/sign-up";
-const GALILEO_API_KEYS_URL = "https://app.rungalileo.io/settings/api-keys";
+const GALILEO_SIGNUP_URL = "https://galileo.ai";
+const GALILEO_API_KEYS_URL = "https://app.galileo.ai/meetumo/settings/api-keys";
 
 interface StepProps {
   number: number;
@@ -66,13 +66,13 @@ export default function OnboardingGuide({ onKeySubmitted }: OnboardingGuideProps
               already have one, skip to the next step.
             </p>
             <img
-              src="/onboarding/step-1-signup.svg"
+              src="/onboarding/step-1-signup.png"
               alt="Galileo sign-up page"
               className="mb-3 w-full max-w-lg rounded-lg border"
             />
             <Button variant="outline" className="gap-1.5" asChild>
               <a href={GALILEO_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
-                Open Galileo Sign Up
+                Open Galileo
                 <IconExternalLink className="h-4 w-4" />
               </a>
             </Button>
@@ -85,7 +85,7 @@ export default function OnboardingGuide({ onKeySubmitted }: OnboardingGuideProps
               create a new key. Copy it to your clipboard.
             </p>
             <img
-              src="/onboarding/step-2-api-key.svg"
+              src="/onboarding/step-2-api-key.png"
               alt="Galileo API keys settings page"
               className="mb-3 w-full max-w-lg rounded-lg border"
             />

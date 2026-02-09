@@ -36,7 +36,7 @@ export function TopBar() {
       </div>
       <div className="flex items-center gap-4">
         <Link
-          to="/blog"
+          to={isMyMode ? "/my/blog" : "/blog"}
           className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <IconArticle className="h-4 w-4" />

@@ -212,7 +212,8 @@ export default defineSchema({
       v.literal("running"),
       v.literal("evaluating"),
       v.literal("completed"),
-      v.literal("failed")
+      v.literal("failed"),
+      v.literal("cancelled")
     ),
     progress: v.optional(v.object({
       totalModels: v.number(),
@@ -228,6 +229,7 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
     galileoProjectName: v.optional(v.string()),
+    galileoProjectId: v.optional(v.string()),
     galileoLogStreamName: v.optional(v.string()),
     galileoMetricMapping: v.optional(v.any()),
     galileoSetupError: v.optional(v.string()),

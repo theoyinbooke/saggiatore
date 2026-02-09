@@ -1,90 +1,67 @@
-# Welcome to your Convex functions directory!
+# Saggiatore — Convex Backend
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+Real-time backend powering the Saggiatore evaluation platform. All server functions, database schema, and integrations live here.
 
-A query function that takes two arguments looks like:
+## Database Schema (14 tables)
 
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
+### Core Evaluation
 
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+| Table | Purpose |
+|-------|---------|
+| `personas` | 30 immigration client profiles with backstory, goals, and challenges |
+| `tools` | 32 simulated immigration tools (eligibility checks, form lookups, etc.) |
+| `scenarios` | 25 evaluation scenarios pairing personas with immigration challenges |
+| `sessions` | Evaluation session state (model, scenario, status, timing) |
+| `messages` | Normalized conversation messages — each insert triggers real-time UI |
+| `evaluations` | Scored evaluation results with per-metric breakdowns |
+| `leaderboard` | Aggregated model rankings across scenarios |
+| `modelRegistry` | Available models with display names, colors, and enabled state |
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
+### My Saggiatore (Custom Evaluations)
 
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
+| Table | Purpose |
+|-------|---------|
+| `customEvaluations` | User-created evaluation frameworks (use case, generated config) |
+| `customSessions` | Sessions for custom evaluation runs |
+| `customMessages` | Messages for custom evaluation conversations |
+| `customSessionEvaluations` | Scored results for custom sessions |
+| `customLeaderboard` | Rankings for custom evaluation frameworks |
 
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
+## Key Modules
+
+| Module | Type | Purpose |
+|--------|------|---------|
+| `orchestrator.ts` | action | Main evaluation loop: agent + persona simulator + tool simulator |
+| `galileoEval.ts` | action | Galileo SDK integration for production-grade scoring |
+| `seed.ts` | action | Seeds personas, tools, and scenarios from `data/*.json` |
+| `batchRunner.ts` | action | Runs batch evaluations across models and scenarios |
+| `llmClient.ts` | utility | Unified LLM client (OpenAI, OpenRouter, Groq) |
+| `customOrchestrator.ts` | action | Orchestration for My Saggiatore custom evaluations |
+| `customGenerator.ts` | action | Claude-powered generation of personas, tools, scenarios, metrics |
+| `customGalileoEval.ts` | action | Galileo evaluation for custom sessions |
+
+## Development Commands
+
+```bash
+# Start Convex dev server (watches for changes)
+npx convex dev
+
+# Seed the database
+npx convex run seed:seedAll
+
+# Run batch evaluations
+npx convex run batchRunner:populateEvaluations
+
+# Deploy to production
+npx convex deploy
 ```
 
-Using this query function in a React component looks like:
+## Environment Variables (server-side)
 
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
+Set via `npx convex env set <KEY> <VALUE>`:
 
-A mutation function looks like:
-
-```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) =>
-    console.log(result),
-  );
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+- `OPENAI_API_KEY` — GPT-4o agent and GPT-4o-mini simulators
+- `OPENROUTER_API_KEY` — Claude Sonnet 4.5 via OpenRouter
+- `GROQ_API_KEY` — Llama, Mixtral via Groq
+- `GALILEO_API_KEY` — Production evaluation scoring (optional)
+- `CLERK_JWT_ISSUER_DOMAIN` — Clerk JWT issuer for authentication

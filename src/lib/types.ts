@@ -147,7 +147,7 @@ export interface ModelRegistryEntry {
 // My Saggiatore Types
 // ============================================
 
-export type CustomEvaluationStatus = "draft" | "generating" | "running" | "evaluating" | "completed" | "failed";
+export type CustomEvaluationStatus = "draft" | "generating" | "running" | "evaluating" | "completed" | "failed" | "cancelled";
 
 export interface GeneratedPersona {
   id: string;
@@ -226,6 +226,7 @@ export interface CustomEvaluation {
   completedAt?: number;
   errorMessage?: string;
   galileoProjectName?: string;
+  galileoProjectId?: string;
   galileoLogStreamName?: string;
   galileoMetricMapping?: Record<string, { galileoName: string; isBuiltIn: boolean; isInverted?: boolean }>;
   galileoSetupError?: string;

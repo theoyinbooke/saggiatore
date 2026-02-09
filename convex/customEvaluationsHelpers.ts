@@ -72,7 +72,8 @@ export const internalUpdateStatus = internalMutation({
       v.literal("running"),
       v.literal("evaluating"),
       v.literal("completed"),
-      v.literal("failed")
+      v.literal("failed"),
+      v.literal("cancelled")
     ),
     errorMessage: v.optional(v.string()),
     completedAt: v.optional(v.number()),
@@ -116,6 +117,13 @@ export const internalUpdateProgress = internalMutation({
       progress: args.progress,
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const internalUpdateTitle = internalMutation({
+  args: { id: v.id("customEvaluations"), title: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { title: args.title, updatedAt: Date.now() });
   },
 });
 

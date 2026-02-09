@@ -145,12 +145,14 @@ export const storeGalileoProjectInfo = internalMutation({
   args: {
     id: v.id("customEvaluations"),
     galileoProjectName: v.string(),
+    galileoProjectId: v.optional(v.string()),
     galileoLogStreamName: v.string(),
     galileoMetricMapping: v.any(),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       galileoProjectName: args.galileoProjectName,
+      ...(args.galileoProjectId ? { galileoProjectId: args.galileoProjectId } : {}),
       galileoLogStreamName: args.galileoLogStreamName,
       galileoMetricMapping: args.galileoMetricMapping,
       updatedAt: Date.now(),
@@ -167,7 +169,8 @@ export const updateEvaluationStatus = internalMutation({
       v.literal("running"),
       v.literal("evaluating"),
       v.literal("completed"),
-      v.literal("failed")
+      v.literal("failed"),
+      v.literal("cancelled")
     ),
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),

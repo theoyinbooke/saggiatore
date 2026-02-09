@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
@@ -7,14 +7,20 @@ import { ModelSessionPanel } from "@/components/ModelSessionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 import { ModelMultiSelect } from "@/components/ModelMultiSelect";
-import { IconPlayerPlay, IconRefresh, IconAlertTriangle, IconInfoCircle, IconPlayerStop, IconX } from "@tabler/icons-react";
+import { IconPlayerPlay, IconRefresh, IconAlertTriangle, IconInfoCircle, IconPlayerStop, IconX, IconChevronDown } from "@tabler/icons-react";
 import { CATEGORY_DISPLAY_NAMES, MAX_ENABLED_MODELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Scenario, ScenarioCategory, ModelRegistryEntry } from "@/lib/types";
@@ -41,9 +47,20 @@ export function ScenarioRunnerPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [backendError, setBackendError] = useState(false);
   const [showCancelAll, setShowCancelAll] = useState(false);
+  const [scenarioOpen, setScenarioOpen] = useState(false);
 
   const rawScenarios = useQuery(api.scenarios.list);
   const scenarios: Scenario[] = (rawScenarios as Scenario[] | undefined) ?? [];
+
+  // Group scenarios by category for the dropdown
+  const scenariosByCategory = useMemo(() => {
+    const grouped: Record<string, Scenario[]> = {};
+    for (const s of scenarios) {
+      if (!grouped[s.category]) grouped[s.category] = [];
+      grouped[s.category].push(s);
+    }
+    return grouped;
+  }, [scenarios]);
 
   const rawEnabledModels = useQuery(api.modelRegistry.listEnabled);
   const enabledModels: ModelRegistryEntry[] = (rawEnabledModels as ModelRegistryEntry[] | undefined) ?? [];
@@ -89,6 +106,20 @@ export function ScenarioRunnerPage() {
     setActiveSessions(restoredMap);
     setIsRunning(true);
   }, [rawActiveSessions]);
+
+  // Auto-clear panels when all sessions finish (no more active sessions)
+  useEffect(() => {
+    if (
+      isRunning &&
+      activeSessions.size > 0 &&
+      hasRestoredRef.current &&
+      rawActiveSessions !== undefined &&
+      rawActiveSessions.length === 0
+    ) {
+      setActiveSessions(new Map());
+      setIsRunning(false);
+    }
+  }, [rawActiveSessions, isRunning, activeSessions.size]);
 
   async function handleRun() {
     if (!selectedScenarioId || selectedModelIds.length === 0) return;
@@ -167,18 +198,46 @@ export function ScenarioRunnerPage() {
           <label className="text-xs font-medium text-muted-foreground">
             Scenario
           </label>
-          <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-            <SelectTrigger className="w-72">
-              <SelectValue placeholder="Select a scenario..." />
-            </SelectTrigger>
-            <SelectContent>
-              {scenarios.map((s) => (
-                <SelectItem key={s._id} value={s._id}>
-                  {s.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={scenarioOpen} onOpenChange={setScenarioOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="border-input bg-background flex h-9 w-72 items-center justify-between rounded-md border px-3 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="truncate">
+                  {selectedScenarioId
+                    ? scenarios.find((s) => s._id === selectedScenarioId)?.title ?? "Select a scenario..."
+                    : "Select a scenario..."}
+                </span>
+                <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search scenarios..." />
+                <CommandList>
+                  <CommandEmpty>No scenarios found.</CommandEmpty>
+                  {Object.entries(scenariosByCategory).map(([cat, items]) => (
+                    <CommandGroup key={cat} heading={CATEGORY_DISPLAY_NAMES[cat as ScenarioCategory] ?? cat}>
+                      {items.map((s) => (
+                        <CommandItem
+                          key={s._id}
+                          value={s.title}
+                          data-checked={selectedScenarioId === s._id}
+                          onSelect={() => {
+                            setSelectedScenarioId(s._id);
+                            setScenarioOpen(false);
+                          }}
+                        >
+                          {s.title}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="space-y-1.5">
@@ -283,7 +342,7 @@ export function ScenarioRunnerPage() {
       {backendError && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <IconAlertTriangle className="h-4 w-4 shrink-0" />
-          Could not connect to backend — showing demo data
+          Could not connect to backend — some features may be unavailable
         </div>
       )}
 

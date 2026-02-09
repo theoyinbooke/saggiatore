@@ -353,11 +353,11 @@ function SessionListView() {
 function SessionDetailView({ sessionId }: { sessionId: string }) {
   const navigate = useNavigate();
 
-  // Mock IDs (e.g. "mock-session-1") are not valid Convex document IDs.
-  // Skip Convex queries for mock data to avoid ArgumentValidationError.
+  // Placeholder IDs (e.g. "mock-session-1") are not valid Convex document IDs.
+  // Skip Convex queries for placeholder IDs to avoid ArgumentValidationError.
   const isMockId = sessionId.startsWith("mock-");
 
-  // Convex queries with mock fallback
+  // Convex queries (skip for placeholder session IDs)
   const rawSession = useQuery(
     api.sessions.getById,
     isMockId ? "skip" : { id: sessionId as never }
@@ -386,7 +386,7 @@ function SessionDetailView({ sessionId }: { sessionId: string }) {
   const scenario: Scenario | undefined = rawScenario as Scenario | undefined;
 
   // Determine if queries have resolved (rawSession is null when Convex returns no result, undefined when loading)
-  // For mock IDs, queries are skipped so treat as resolved immediately.
+  // For placeholder IDs, queries are skipped so treat as resolved immediately.
   const queriesResolved = isMockId || rawSession !== undefined;
 
   // Session not found (queries resolved but no session in DB or mocks)

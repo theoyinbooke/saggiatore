@@ -88,6 +88,14 @@ export function App() {
             }
           />
           <Route
+            path="/my/blog"
+            element={
+              <Suspense fallback={suspenseFallback}>
+                <BlogPage />
+              </Suspense>
+            }
+          />
+          <Route
             path="/my/settings"
             element={
               <RequireAuth>

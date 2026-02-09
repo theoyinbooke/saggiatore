@@ -89,6 +89,28 @@ export const createSession = internalMutation({
   },
 });
 
+export const createSessionsBatch = internalMutation({
+  args: {
+    sessions: v.array(
+      v.object({
+        evaluationId: v.id("customEvaluations"),
+        scenarioLocalId: v.string(),
+        personaLocalId: v.string(),
+        modelId: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const s of args.sessions) {
+      await ctx.db.insert("customSessions", {
+        ...s,
+        status: "pending",
+        totalTurns: 0,
+      });
+    }
+  },
+});
+
 export const updateSessionStatus = internalMutation({
   args: {
     sessionId: v.id("customSessions"),
@@ -154,7 +176,8 @@ export const updateEvaluationStatus = internalMutation({
       v.literal("running"),
       v.literal("evaluating"),
       v.literal("completed"),
-      v.literal("failed")
+      v.literal("failed"),
+      v.literal("cancelled")
     ),
     errorMessage: v.optional(v.string()),
     completedAt: v.optional(v.number()),

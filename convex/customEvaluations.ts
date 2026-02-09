@@ -67,7 +67,8 @@ export const updateStatus = mutation({
       v.literal("running"),
       v.literal("evaluating"),
       v.literal("completed"),
-      v.literal("failed")
+      v.literal("failed"),
+      v.literal("cancelled")
     ),
     errorMessage: v.optional(v.string()),
     completedAt: v.optional(v.number()),
@@ -188,6 +189,40 @@ export const generateShareLink = mutation({
     const shareId = crypto.randomUUID();
     await ctx.db.patch(args.id, { shareId, updatedAt: Date.now() });
     return shareId;
+  },
+});
+
+export const cancelEvaluation = mutation({
+  args: { id: v.id("customEvaluations") },
+  handler: async (ctx, args) => {
+    const identity = await requireAuth(ctx);
+    const userId = getUserIdFromIdentity(identity);
+    const eval_ = await ctx.db.get(args.id);
+    if (!eval_ || eval_.userId !== userId) throw new Error("Not authorized");
+    if (eval_.status !== "running" && eval_.status !== "evaluating") {
+      throw new Error("Can only cancel running or evaluating evaluations");
+    }
+
+    // Mark evaluation as cancelled
+    await ctx.db.patch(args.id, {
+      status: "cancelled",
+      completedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Cancel all pending/running sessions
+    const sessions = await ctx.db
+      .query("customSessions")
+      .withIndex("by_evaluationId", (q) => q.eq("evaluationId", args.id))
+      .collect();
+    for (const session of sessions) {
+      if (session.status === "pending" || session.status === "running") {
+        await ctx.db.patch(session._id, {
+          status: "cancelled",
+          completedAt: Date.now(),
+        });
+      }
+    }
   },
 });
 

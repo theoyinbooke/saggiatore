@@ -39,7 +39,7 @@ Saggiatore is a full-stack application with four layers: a React frontend for vi
 +-------------------+   +---------------------+
 ```
 
-**React + Vite + Tailwind + shadcn/ui** provides the frontend -- a visitors-analytics aesthetic with a white canvas, floating bottom dock navigation, and donut charts for score visualization. Every page uses a `useQuery(...) ?? MOCK_DATA` pattern so the app renders meaningfully even before the Convex backend is configured.
+**React + Vite + Tailwind + shadcn/ui** provides the frontend -- a visitors-analytics aesthetic with a white canvas, floating bottom dock navigation, and donut charts for score visualization. Every page uses a `useQuery(...) ?? []` pattern so the app renders meaningfully even before the Convex backend is configured.
 
 **Convex** serves as both the database and the backend runtime. Its real-time subscriptions mean the leaderboard updates live as evaluations complete. The normalized `messages` table drives a turn-by-turn conversation replay view.
 

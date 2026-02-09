@@ -268,3 +268,105 @@ export const recalculate = mutation({
     }
   },
 });
+
+export const recalculateAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const entries = await ctx.db.query("leaderboard").collect();
+    const results: { modelId: string; status: string }[] = [];
+
+    for (const entry of entries) {
+      const sessions = await ctx.db
+        .query("sessions")
+        .withIndex("by_modelId", (q) => q.eq("modelId", entry.modelId))
+        .collect();
+
+      const completedSessions = sessions.filter(
+        (s) => s.status === "completed"
+      );
+
+      if (completedSessions.length === 0) {
+        results.push({ modelId: entry.modelId, status: "no_completed_sessions" });
+        continue;
+      }
+
+      const evaluations = [];
+      for (const session of completedSessions) {
+        const evaluation = await ctx.db
+          .query("evaluations")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+          .first();
+        if (evaluation) {
+          evaluations.push({ evaluation, session });
+        }
+      }
+
+      if (evaluations.length === 0) {
+        results.push({ modelId: entry.modelId, status: "no_evaluations" });
+        continue;
+      }
+
+      const count = evaluations.length;
+      const avgMetrics = {
+        toolAccuracy:
+          evaluations.reduce((s, e) => s + e.evaluation.metrics.toolAccuracy, 0) / count,
+        empathy:
+          evaluations.reduce((s, e) => s + e.evaluation.metrics.empathy, 0) / count,
+        factualCorrectness:
+          evaluations.reduce((s, e) => s + e.evaluation.metrics.factualCorrectness, 0) / count,
+        completeness:
+          evaluations.reduce((s, e) => s + e.evaluation.metrics.completeness, 0) / count,
+        safetyCompliance:
+          evaluations.reduce((s, e) => s + e.evaluation.metrics.safetyCompliance, 0) / count,
+      };
+
+      const overallScore =
+        (avgMetrics.toolAccuracy +
+          avgMetrics.empathy +
+          avgMetrics.factualCorrectness +
+          avgMetrics.completeness +
+          avgMetrics.safetyCompliance) / 5;
+
+      const categories = [
+        "visa_application",
+        "status_change",
+        "family_immigration",
+        "deportation_defense",
+        "humanitarian",
+      ] as const;
+
+      const categoryScores: Record<string, number> = {};
+      for (const cat of categories) {
+        const catEvals = [];
+        for (const { evaluation, session } of evaluations) {
+          const scenario = await ctx.db.get(session.scenarioId);
+          if (scenario && scenario.category === cat) {
+            catEvals.push(evaluation);
+          }
+        }
+        categoryScores[cat] =
+          catEvals.length > 0
+            ? catEvals.reduce((s, e) => s + e.overallScore, 0) / catEvals.length
+            : 0;
+      }
+
+      await ctx.db.patch(entry._id, {
+        overallScore,
+        totalEvaluations: count,
+        metrics: avgMetrics,
+        categoryScores: categoryScores as {
+          visa_application: number;
+          status_change: number;
+          family_immigration: number;
+          deportation_defense: number;
+          humanitarian: number;
+        },
+        lastUpdated: Date.now(),
+      });
+
+      results.push({ modelId: entry.modelId, status: "recalculated" });
+    }
+
+    return results;
+  },
+});

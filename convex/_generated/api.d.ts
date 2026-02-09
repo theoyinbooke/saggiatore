@@ -35,6 +35,7 @@ import type * as personas from "../personas.js";
 import type * as scenarios from "../scenarios.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
+import type * as settingsAdmin from "../settingsAdmin.js";
 import type * as tools from "../tools.js";
 
 import type {
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   scenarios: typeof scenarios;
   seed: typeof seed;
   sessions: typeof sessions;
+  settingsAdmin: typeof settingsAdmin;
   tools: typeof tools;
 }>;
 

@@ -110,7 +110,7 @@ async function callPersonaSimulator(
     }
   }
 
-  const result = await callLLM("openai", perspectiveMessages, undefined, "gpt-4o-mini");
+  const result = await callLLM("openai", perspectiveMessages, undefined, "gpt-4o-mini", 500);
   return result.content ?? "I'm not sure what to say.";
 }
 
@@ -133,7 +133,8 @@ Return ONLY valid JSON, no explanation. Make the data plausible and detailed.`;
       { role: "user", content: `Arguments: ${toolArguments}` },
     ],
     undefined,
-    "gpt-4o-mini"
+    "gpt-4o-mini",
+    300
   );
 
   return result.content ?? JSON.stringify({ error: "Tool simulation failed" });
@@ -236,20 +237,19 @@ export const startEvaluation = internalAction({
       }
     );
 
-    // Create all session records
-    for (const modelId of modelIds) {
-      for (const scenario of scenarios) {
-        await ctx.runMutation(
-          internal.customOrchestratorHelpers.createSession,
-          {
-            evaluationId: args.evaluationId,
-            scenarioLocalId: scenario.id,
-            personaLocalId: scenario.personaId,
-            modelId,
-          }
-        );
-      }
-    }
+    // Create all session records in a single batch transaction
+    const sessionsToCreate = modelIds.flatMap((modelId: string) =>
+      scenarios.map((scenario: GeneratedScenario) => ({
+        evaluationId: args.evaluationId,
+        scenarioLocalId: scenario.id,
+        personaLocalId: scenario.personaId,
+        modelId,
+      }))
+    );
+    await ctx.runMutation(
+      internal.customOrchestratorHelpers.createSessionsBatch,
+      { sessions: sessionsToCreate }
+    );
 
     // Schedule each session as its own action to avoid the 600s timeout
     const allSessions = await ctx.runQuery(
@@ -461,35 +461,44 @@ export const runSingleSession = internalAction({
             })),
           });
 
-          // Process each tool call
-          for (const toolCall of agentResponse.tool_calls) {
-            const toolDef = toolMap.get(toolCall.function.name);
-            let toolResult: string;
-
-            if (toolDef) {
-              try {
-                toolResult = await callToolSimulator(
-                  toolCall.function.name,
-                  toolCall.function.arguments,
-                  toolDef
-                );
-              } catch {
-                toolResult = JSON.stringify({
-                  error: `Tool simulation error for ${toolCall.function.name}`,
-                });
+          // Parallelize LLM tool simulation calls (independent)
+          const toolResults = await Promise.all(
+            agentResponse.tool_calls.map(async (toolCall) => {
+              const toolDef = toolMap.get(toolCall.function.name);
+              if (toolDef) {
+                try {
+                  const result = await callToolSimulator(
+                    toolCall.function.name,
+                    toolCall.function.arguments,
+                    toolDef
+                  );
+                  return { toolCall, result };
+                } catch {
+                  return {
+                    toolCall,
+                    result: JSON.stringify({
+                      error: `Tool simulation error for ${toolCall.function.name}`,
+                    }),
+                  };
+                }
               }
-            } else {
-              toolResult = JSON.stringify({
-                error: `Unknown tool: ${toolCall.function.name}`,
-              });
-            }
+              return {
+                toolCall,
+                result: JSON.stringify({
+                  error: `Unknown tool: ${toolCall.function.name}`,
+                }),
+              };
+            })
+          );
 
+          // Insert messages sequentially (must await each mutation)
+          for (const { toolCall, result } of toolResults) {
             await ctx.runMutation(
               internal.customOrchestratorHelpers.insertMessage,
               {
                 sessionId,
                 role: "tool",
-                content: toolResult,
+                content: result,
                 turnNumber,
                 toolCallId: toolCall.id,
                 timestamp: Date.now(),
@@ -498,7 +507,7 @@ export const runSingleSession = internalAction({
 
             agentHistory.push({
               role: "tool",
-              content: toolResult,
+              content: result,
               tool_call_id: toolCall.id,
             });
           }
@@ -669,7 +678,7 @@ async function scheduleProgressAndFinalizationCheck(
 
   if (allDone) {
     await ctx.scheduler.runAfter(
-      5000,
+      500,
       internal.customGalileoEval.finalizeEvaluation,
       { evaluationId }
     );

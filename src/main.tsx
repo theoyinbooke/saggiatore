@@ -41,7 +41,7 @@ function Root() {
     );
   }
 
-  // No backend (mock data mode)
+  // No backend configured
   return <ModelRegistryProvider>{app}</ModelRegistryProvider>;
 }
 

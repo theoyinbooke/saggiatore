@@ -78,6 +78,16 @@ export default function CreateEvaluationModal({
     );
   }
 
+  function deriveOptimisticTitle(desc: string): string {
+    const firstSentence = desc.split(/[.!?\n]/)[0].trim();
+    const raw = firstSentence.length <= 60
+      ? firstSentence
+      : firstSentence.slice(0, 57) + "...";
+    const capitalized = raw.charAt(0).toUpperCase() + raw.slice(1);
+    if (/eval/i.test(capitalized)) return capitalized;
+    return `${capitalized} Evaluation`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isSubmitting) return;
@@ -90,7 +100,7 @@ export default function CreateEvaluationModal({
 
       const evalId = await createEval({
         userId: user!.id,
-        title: "New Evaluation",
+        title: deriveOptimisticTitle(description),
         useCaseDescription: description,
         selectedModelIds: selectedModels,
       });
@@ -109,7 +119,7 @@ export default function CreateEvaluationModal({
     }
   }
 
-  const canSubmit = description.length >= 50 && selectedModels.length > 0 && !isSubmitting;
+  const canSubmit = description.length >= 50 && selectedModels.length > 0 && (apiKey.trim().length > 0 || hasSettingsKey) && !isSubmitting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -187,7 +197,7 @@ export default function CreateEvaluationModal({
           {/* Galileo API Key */}
           <div className="space-y-2">
             <Label htmlFor="galileo-key">
-              Galileo API Key (optional)
+              Galileo API Key
             </Label>
             <div className="relative">
               <Input
@@ -211,15 +221,22 @@ export default function CreateEvaluationModal({
                 </Link>
               </p>
             ) : (
-              <label className="flex items-center gap-2">
-                <Checkbox
-                  checked={saveKey}
-                  onCheckedChange={(checked) => setSaveKey(checked === true)}
-                />
-                <span className="text-sm text-muted-foreground">
-                  Save API key for future evaluations
-                </span>
-              </label>
+              <>
+                {!apiKey.trim() && (
+                  <p className="text-xs text-destructive">
+                    Required — evaluations are scored by Galileo
+                  </p>
+                )}
+                <label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={saveKey}
+                    onCheckedChange={(checked) => setSaveKey(checked === true)}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Save API key for future evaluations
+                  </span>
+                </label>
+              </>
             )}
           </div>
 

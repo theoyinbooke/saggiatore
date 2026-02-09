@@ -4,9 +4,8 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
+  init as galileoInit,
   GalileoLogger,
-  createProject,
-  createLogStream,
   createCustomLlmMetric,
   enableMetrics,
   getProject,
@@ -40,44 +39,8 @@ interface ConversationMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — simulated scoring (fallback)
+// Helpers
 // ---------------------------------------------------------------------------
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + ch) | 0;
-  }
-  return Math.abs(hash);
-}
-
-function generateSimulatedMetricScores(
-  modelId: string,
-  metrics: GeneratedMetric[],
-  messages: ConversationMessage[] = []
-): Record<string, number> {
-  const base = 0.76 + (hashString(modelId) % 5) / 100;
-  const jitter = () => (Math.random() - 0.5) * 0.2;
-  const clamp = (n: number) => Math.max(0, Math.min(1, n));
-
-  // Check whether the model actually called any tools
-  const hasToolUsage = messages.some((m) => m.role === "tool");
-
-  const scores: Record<string, number> = {};
-  for (let i = 0; i < metrics.length; i++) {
-    const key = metrics[i].key.toLowerCase();
-    // Zero out tool-related metrics if no tools were called
-    if (!hasToolUsage && key.includes("tool")) {
-      scores[metrics[i].key] = 0;
-      continue;
-    }
-    const offset = hashString(modelId + "-" + metrics[i].key) % 8;
-    const metricOffset = 0.04 + (offset % 5) / 100;
-    scores[metrics[i].key] = clamp(base + metricOffset + jitter());
-  }
-  return scores;
-}
 
 function computeWeightedScore(
   metricScores: Record<string, number>,
@@ -175,12 +138,17 @@ export const setupGalileoProject = internalAction({
       const config = evaluation.generatedConfig;
       const metrics: GeneratedMetric[] = config.metrics;
 
-      // Create project
-      await createProject(galileoProjectName);
+      // Initialize project + log stream via galileoInit (ensures correct project
+      // type so that getTraces score retrieval works later without conflict).
+      // galileoInit always creates a "default" log stream, so we use that name.
+      const logStreamName = "default";
+      await galileoInit({
+        projectName: galileoProjectName,
+      });
 
-      // Create log stream
-      const logStreamName = "eval-run";
-      await createLogStream(logStreamName, galileoProjectName);
+      // Retrieve the project ID created by init
+      const createdProject = await getProject({ name: galileoProjectName });
+      const galileoProjectId = createdProject?.id ?? "";
 
       // Map generated metrics to Galileo metrics
       const metricMapping: Record<string, MetricMapping> = {};
@@ -230,6 +198,7 @@ export const setupGalileoProject = internalAction({
         {
           id: evaluationId,
           galileoProjectName,
+          galileoProjectId,
           galileoLogStreamName: logStreamName,
           galileoMetricMapping: metricMapping,
         }
@@ -317,41 +286,37 @@ export const evaluateCustomSession = internalAction({
         (s: { id: string }) => s.id === session.scenarioLocalId
       );
 
-      let metricScores: Record<string, number>;
-      let galileoTraceId: string | undefined;
-      let galileoConsoleUrl: string | undefined;
-      let scoringSource: "galileo" | "simulated" = "simulated";
-
-      // Try real Galileo evaluation if API key + project info available
+      // Galileo is the only scoring mechanism — skip if config is missing
       if (
-        args.galileoApiKey &&
-        evaluation.galileoProjectName &&
-        evaluation.galileoLogStreamName &&
-        evaluation.galileoMetricMapping
+        !args.galileoApiKey ||
+        !evaluation.galileoProjectName ||
+        !evaluation.galileoLogStreamName ||
+        !evaluation.galileoMetricMapping
       ) {
-        try {
-          const result = await evaluateWithGalileo(
-            messages,
-            session.modelId,
-            args.galileoApiKey,
-            evaluation.galileoProjectName,
-            evaluation.galileoLogStreamName,
-            evaluation.galileoMetricMapping as Record<string, MetricMapping>,
-            metrics,
-            scenario?.title ?? "Unknown scenario",
-            config.domain
-          );
-          metricScores = result.metricScores;
-          galileoTraceId = result.traceId;
-          galileoConsoleUrl = result.consoleUrl;
-          scoringSource = "galileo";
-        } catch (galileoErr) {
-          const msg = galileoErr instanceof Error ? galileoErr.message : String(galileoErr);
-          throw new Error(`Galileo evaluation failed for session ${sessionId}: ${msg}`);
-        }
-      } else {
-        // Simulated scoring (no Galileo key)
-        metricScores = generateSimulatedMetricScores(session.modelId, metrics, messages);
+        console.log(`Skipping evaluation for session ${sessionId}: Galileo config missing`);
+        return;
+      }
+
+      const result = await evaluateWithGalileo(
+        messages,
+        session.modelId,
+        args.galileoApiKey,
+        evaluation.galileoProjectName,
+        evaluation.galileoLogStreamName,
+        evaluation.galileoMetricMapping as Record<string, MetricMapping>,
+        metrics,
+        scenario?.title ?? "Unknown scenario",
+        config.domain,
+        evaluation.galileoProjectId
+      );
+      const { metricScores, traceId: galileoTraceId, consoleUrl: galileoConsoleUrl, scoringSource } = result;
+
+      // If Galileo hasn't finished scoring yet, skip storing — no fake scores
+      if (scoringSource === "pending_galileo") {
+        console.log(
+          `Session ${sessionId}: Galileo scores still computing. Trace ingested (${galileoTraceId}). Skipping score storage.`
+        );
+        return;
       }
 
       // Compute overall score as weighted average
@@ -383,11 +348,49 @@ export const evaluateCustomSession = internalAction({
           failureAnalysis: failureAnalysis.length > 0 ? failureAnalysis : undefined,
           galileoTraceId,
           galileoConsoleUrl,
-          scoringSource,
+          scoringSource: "galileo",
         }
       );
     } catch (error) {
       console.error("Custom session evaluation failed:", error);
+
+      // Store a zero-score evaluation so finalizeEvaluation always finds records
+      const config = await ctx.runQuery(
+        internal.customGalileoEvalHelpers.getEvaluation,
+        { id: evaluationId }
+      ).then((e) => e?.generatedConfig);
+
+      if (config) {
+        const zeroScores: Record<string, number> = {};
+        for (const m of (config.metrics as GeneratedMetric[])) {
+          zeroScores[m.key] = 0;
+        }
+
+        const session = await ctx.runQuery(
+          internal.customGalileoEvalHelpers.getSession,
+          { sessionId }
+        );
+        const scenario = session
+          ? (config.scenarios as { id: string; category: string }[]).find(
+              (s) => s.id === session.scenarioLocalId
+            )
+          : undefined;
+
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeSessionEvaluation,
+          {
+            sessionId,
+            evaluationId,
+            overallScore: 0,
+            metricScores: zeroScores,
+            categoryScore: scenario ? { category: scenario.category, score: 0 } : undefined,
+            failureAnalysis: [
+              `Evaluation error: ${error instanceof Error ? error.message : "Unknown error"}`,
+            ],
+            scoringSource: "error",
+          }
+        );
+      }
     }
   },
 });
@@ -405,11 +408,13 @@ async function evaluateWithGalileo(
   metricMapping: Record<string, MetricMapping>,
   metrics: GeneratedMetric[],
   scenarioTitle: string,
-  domain: string
+  domain: string,
+  projectId?: string
 ): Promise<{
   metricScores: Record<string, number>;
   traceId: string;
   consoleUrl: string;
+  scoringSource: "galileo" | "pending_galileo";
 }> {
   // Set API key
   process.env.GALILEO_API_KEY = galileoApiKey;
@@ -428,9 +433,15 @@ async function evaluateWithGalileo(
     // Find first user message for trace input
     const firstUserMsg = messages.find((m) => m.role === "user")?.content ?? "Agent evaluation";
 
+    // Generate a unique trace name so we can find this trace later via getTraces.
+    // flush() does NOT return the Galileo-assigned trace ID, so we encode a
+    // unique suffix in the name and filter by it when polling.
+    const traceSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const traceName = `${scenarioTitle} [${modelId}] ${traceSuffix}`;
+
     logger.startTrace({
       input: firstUserMsg,
-      name: scenarioTitle,
+      name: traceName,
       tags: [modelId, domain],
     });
 
@@ -474,64 +485,108 @@ async function evaluateWithGalileo(
       output: lastAssistant?.content ?? "",
     });
 
-    // Flush and get trace ID
-    const traces = await logger.flush();
-    const traceId =
-      (traces?.[0] as { id?: string } | undefined)?.id ?? `trace-${Date.now()}`;
+    // Flush traces to Galileo
+    await logger.flush();
 
-    const consoleUrl = `https://console.galileo.ai/project/${encodeURIComponent(projectName)}/traces/${traceId}`;
-
-    // Poll for scorer results
-    const project = await getProject({ name: projectName });
-    if (!project?.id) {
-      // Can't poll without project ID — use simulated scores mapped through
-      return {
-        metricScores: generateSimulatedMetricScores(
-          modelId,
-          metrics,
-          messages
-        ),
-        traceId,
-        consoleUrl,
-      };
+    // Resolve project ID: prefer stored ID, fall back to API lookup
+    let resolvedProjectId = projectId;
+    if (!resolvedProjectId) {
+      const project = await getProject({ name: projectName });
+      resolvedProjectId = project?.id;
     }
 
-    const logStream = await getLogStream({
-      name: logStreamName,
-      projectName,
-    });
+    const consoleUrl = resolvedProjectId
+      ? `https://app.galileo.ai/meetumo/project/${encodeURIComponent(resolvedProjectId)}`
+      : `https://app.galileo.ai/meetumo/project/${encodeURIComponent(projectName)}`;
+
+    if (!resolvedProjectId) {
+      throw new Error(`Cannot poll Galileo scores: project ID not found for "${projectName}"`);
+    }
+
+    // Initialize Galileo SDK state before polling so getTraces can resolve context
+    try {
+      await galileoInit({ projectName, logstream: logStreamName });
+    } catch (initErr) {
+      console.warn("galileoInit warning (will continue with polling):", initErr);
+    }
+
+    let logStream: { id?: string } | null = null;
+    try {
+      logStream = await getLogStream({
+        name: logStreamName,
+        projectName,
+      });
+    } catch (lsErr) {
+      console.warn("getLogStream warning (will poll without logStreamId):", lsErr);
+    }
+
+    // Poll for scorer results — Galileo LLM-based metrics can take 1-3 minutes
+    const MAX_ATTEMPTS = 12;
+    const POLL_INTERVAL_MS = 15_000; // 15 seconds between attempts (3 min total)
 
     let scorerResults: Record<string, number> | null = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await new Promise((r) => setTimeout(r, 5000));
+    let lastPollingError: string | null = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
-      const traceResults = await getTraces({
-        projectId: project.id,
-        logStreamId: logStream?.id,
-        filters: [
-          {
-            columnId: "id",
-            operator: "eq" as const,
-            value: traceId,
-            type: "text" as const,
-          },
-        ],
-        limit: 1,
-      });
+      try {
+        const traceResults = await getTraces({
+          projectId: resolvedProjectId,
+          logStreamId: logStream?.id,
+          filters: [
+            {
+              columnId: "name",
+              operator: "eq" as const,
+              value: traceName,
+              type: "text" as const,
+            },
+          ],
+          limit: 1,
+        });
 
-      const trace = traceResults?.records?.[0];
-      if (trace?.metrics && Object.keys(trace.metrics).length > 0) {
-        const numericMetrics: Record<string, number> = {};
-        for (const [key, val] of Object.entries(trace.metrics)) {
-          if (typeof val === "number") {
-            numericMetrics[key] = val;
+        const trace = traceResults?.records?.[0];
+        if (trace) {
+          const traceMetrics = trace.metrics;
+          if (traceMetrics && Object.keys(traceMetrics).length > 0) {
+            const numericMetrics: Record<string, number> = {};
+            for (const [key, val] of Object.entries(traceMetrics)) {
+              if (typeof val === "number") {
+                numericMetrics[key] = val;
+              }
+            }
+            if (Object.keys(numericMetrics).length > 0) {
+              console.log(
+                `Galileo scores retrieved on attempt ${attempt + 1}/${MAX_ATTEMPTS}:`,
+                Object.keys(numericMetrics).join(", ")
+              );
+              scorerResults = numericMetrics;
+              break;
+            }
           }
+          // Trace found but no metrics yet — keep polling
+          if (attempt % 3 === 2) {
+            console.log(
+              `Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace found, metrics not ready yet`
+            );
+          }
+        } else if (attempt % 3 === 2) {
+          console.log(
+            `Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace not found yet`
+          );
         }
-        if (Object.keys(numericMetrics).length > 0) {
-          scorerResults = numericMetrics;
-          break;
-        }
+      } catch (pollErr) {
+        lastPollingError =
+          pollErr instanceof Error ? pollErr.message : String(pollErr);
+        console.warn(`Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS} failed:`, lastPollingError);
       }
+    }
+
+    // If scores not ready yet, return pending status (no fake scores)
+    if (!scorerResults) {
+      console.log(
+        `Galileo scores not ready after ${MAX_ATTEMPTS} attempts (~${(MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s)${lastPollingError ? ` (last error: ${lastPollingError})` : ""}. Scores will be available in Galileo Console.`
+      );
+      return { metricScores: {}, traceId: traceName, consoleUrl, scoringSource: "pending_galileo" };
     }
 
     // Map Galileo scores back to generated metric keys
@@ -540,18 +595,14 @@ async function evaluateWithGalileo(
 
     for (const metric of metrics) {
       const mapping = metricMapping[metric.key];
-      if (!mapping || !scorerResults) {
-        // No mapping or no results — use simulated
-        const simulated = generateSimulatedMetricScores(modelId, [metric], messages);
-        metricScores[metric.key] = simulated[metric.key] ?? 0.75;
+      if (!mapping) {
+        metricScores[metric.key] = 0;
         continue;
       }
 
       const rawScore = scorerResults[mapping.galileoName];
       if (rawScore === undefined) {
-        // Score not available — use simulated
-        const simulated = generateSimulatedMetricScores(modelId, [metric], messages);
-        metricScores[metric.key] = simulated[metric.key] ?? 0.75;
+        metricScores[metric.key] = 0;
         continue;
       }
 
@@ -562,7 +613,7 @@ async function evaluateWithGalileo(
       }
     }
 
-    return { metricScores, traceId, consoleUrl };
+    return { metricScores, traceId: traceName, consoleUrl, scoringSource: "galileo" as const };
   } finally {
     delete process.env.GALILEO_API_KEY;
   }
@@ -663,6 +714,41 @@ export const finalizeEvaluation = internalAction({
             categoryScores,
           }
         );
+      }
+
+      // Detect sessions where Galileo scores weren't ready (no stored evaluation)
+      const totalExpected = allSessions.length;
+      const totalScored = allEvals.length;
+      const pendingCount = totalExpected - totalScored;
+
+      if (pendingCount > 0 && totalScored === 0) {
+        // No sessions got scores — Galileo is still computing everything
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeGalileoSetupError,
+          {
+            id: evaluationId,
+            galileoSetupError: `Galileo is still computing scores for all ${totalExpected} sessions. Check the Galileo Console for results.`,
+          }
+        );
+      } else if (pendingCount > 0) {
+        // Some sessions scored, some still pending
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeGalileoSetupError,
+          {
+            id: evaluationId,
+            galileoSetupError: `Galileo returned scores for ${totalScored} of ${totalExpected} sessions. Remaining scores are still being computed.`,
+          }
+        );
+      }
+
+      // Check if evaluation was cancelled during finalization
+      const currentEval = await ctx.runQuery(
+        internal.customEvaluationsHelpers.internalGetById,
+        { id: evaluationId }
+      );
+      if (currentEval?.status === "cancelled") {
+        console.log("Evaluation was cancelled, skipping completion status update");
+        return;
       }
 
       // Mark evaluation as completed

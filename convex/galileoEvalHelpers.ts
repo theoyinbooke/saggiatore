@@ -80,30 +80,16 @@ export const updateLeaderboard = internalMutation({
         ),
       };
 
-      let updatedCategoryScores = existing.categoryScores;
+      let updatedCategoryScores = { ...existing.categoryScores };
       if (args.categoryScores) {
-        updatedCategoryScores = {
-          visa_application: avg(
-            existing.categoryScores.visa_application,
-            args.categoryScores.visa_application
-          ),
-          status_change: avg(
-            existing.categoryScores.status_change,
-            args.categoryScores.status_change
-          ),
-          family_immigration: avg(
-            existing.categoryScores.family_immigration,
-            args.categoryScores.family_immigration
-          ),
-          deportation_defense: avg(
-            existing.categoryScores.deportation_defense,
-            args.categoryScores.deportation_defense
-          ),
-          humanitarian: avg(
-            existing.categoryScores.humanitarian,
-            args.categoryScores.humanitarian
-          ),
-        };
+        for (const cat of Object.keys(args.categoryScores) as (keyof typeof args.categoryScores)[]) {
+          if (args.categoryScores[cat] > 0) {
+            updatedCategoryScores[cat] = avg(
+              existing.categoryScores[cat],
+              args.categoryScores[cat]
+            );
+          }
+        }
       }
 
       await ctx.db.patch(existing._id, {

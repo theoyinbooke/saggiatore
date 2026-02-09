@@ -2,7 +2,6 @@
 
 Interactive web platform for evaluating and comparing LLM performance on domain-specific tasks. Pre-configured for immigration assistance scenarios with 30 personas, 25 scenarios, and 32 tools, Saggiatore provides real-time leaderboards, metric-driven comparisons, and detailed conversation analysis. It also includes **My Saggiatore** -- describe any use case in natural language and the system auto-generates a complete evaluation framework (personas, tools, scenarios, and metrics) using Claude.
 
-<!-- TODO: Add screenshot of the leaderboard page here -->
 
 ## Features
 
@@ -52,7 +51,7 @@ npx convex env set GALILEO_API_KEY <your-key>
 # 5. Seed the database with personas, tools, and scenarios
 npx convex run seed:seedAll
 
-# 6. Generate sample evaluations (50 demo runs)
+# 6. (Optional) Pre-populate leaderboard with batch evaluations
 npx convex run batchRunner:populateEvaluations
 
 # 7. Start the dev server
@@ -68,6 +67,7 @@ pnpm dev
 | `OPENROUTER_API_KEY` | No | Claude Sonnet 4.5 via OpenRouter |
 | `GROQ_API_KEY` | No | Llama, Mixtral via Groq |
 | `GALILEO_API_KEY` | No | Real evaluation scoring (falls back to simulated) |
+| `CLERK_JWT_ISSUER_DOMAIN` | No | Clerk JWT issuer domain (set as Convex env var) |
 | `VITE_CLERK_PUBLISHABLE_KEY` | No | Clerk authentication |
 | `VITE_MAX_ENABLED_MODELS` | No | Max models enabled simultaneously (default: 10) |
 
@@ -76,12 +76,12 @@ pnpm dev
 ```
 saggiatore/
 ├── convex/              # Backend: schema, queries, mutations, actions
-│   ├── schema.ts        # Database schema (12 tables)
+│   ├── schema.ts        # Database schema (14 tables)
 │   ├── orchestrator.ts  # Main evaluation orchestrator
 │   ├── seed.ts          # Data seeding functions
 │   ├── batchRunner.ts   # Batch evaluation runner
 │   ├── galileoEval.ts   # Galileo integration
-│   └── ...              # 25+ backend modules
+│   └── ...              # 30 backend modules
 ├── data/                # Static seed data
 │   ├── personas.json    # 30 immigration personas
 │   ├── tools.json       # 32 available tools
@@ -132,7 +132,7 @@ npx tsx scripts/setup-galileo-scorers.ts
 | `pnpm preview` | Preview production build locally |
 | `npx convex dev` | Start Convex development server |
 | `npx convex run seed:seedAll` | Seed personas, tools, and scenarios |
-| `npx convex run batchRunner:populateEvaluations` | Generate 50 sample evaluations |
+| `npx convex run batchRunner:populateEvaluations` | Run batch evaluations to populate leaderboard |
 | `npx tsx scripts/setup-galileo-scorers.ts` | Configure Galileo evaluation scorers |
 
 ## Deployment

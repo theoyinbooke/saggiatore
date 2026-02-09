@@ -69,7 +69,8 @@ export async function callLLM(
   provider: LLMProvider,
   messages: OpenAIMessage[],
   tools: OpenAIToolDef[] | undefined,
-  model: string
+  model: string,
+  maxTokens?: number
 ): Promise<LLMResponse> {
   const config = PROVIDER_CONFIG[provider];
   if (!config) throw new Error(`Unknown provider: ${provider}`);
@@ -84,6 +85,9 @@ export async function callLLM(
   if (tools && tools.length > 0) {
     body.tools = tools;
     body.tool_choice = "auto";
+  }
+  if (maxTokens) {
+    body.max_tokens = maxTokens;
   }
 
   const headers: Record<string, string> = {

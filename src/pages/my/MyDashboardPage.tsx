@@ -45,7 +45,7 @@ export default function MyDashboardPage() {
   }
 
   // Show a stable loading state while the query resolves,
-  // instead of flashing mock data then switching to real data.
+  // instead of flashing empty state then switching to real data.
   if (rawEvaluations === undefined) {
     return (
       <div>

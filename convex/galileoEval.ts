@@ -38,15 +38,6 @@ const GALILEO_LOG_STREAM = "immigration-eval";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + ch) | 0;
-  }
-  return Math.abs(hash);
-}
-
 function computeOverallScore(metrics: EvalMetrics): number {
   const weights: Record<keyof EvalMetrics, number> = {
     toolAccuracy: 0.25,
@@ -64,35 +55,6 @@ function computeOverallScore(metrics: EvalMetrics): number {
 
 function generateConsoleUrl(traceId: string): string {
   return `https://console.galileo.ai/project/${GALILEO_PROJECT}/traces/${traceId}`;
-}
-
-function generateSimulatedMetrics(
-  modelId: string,
-  messages: ConversationMessage[]
-): EvalMetrics {
-  // Hash-based base instead of model-specific branching
-  const base = 0.76 + (hashString(modelId) % 5) / 100;
-  const jitter = () => (Math.random() - 0.5) * 0.2;
-  const clamp = (n: number) => Math.max(0, Math.min(1, n));
-
-  // Check whether the model actually called any tools
-  const hasToolUsage = messages.some((m) => m.role === "tool");
-
-  // Hash-based offsets for each metric
-  const offset = hashString(modelId + "-offset") % 8;
-  const toolOffset = 0.06 + (offset % 4) / 100;
-  const empathyOffset = 0.04 + ((offset + 1) % 5) / 100;
-  const factualOffset = 0.07 + ((offset + 2) % 3) / 100;
-  const completeOffset = 0.05 + ((offset + 3) % 4) / 100;
-  const safetyOffset = 0.06 + ((offset + 4) % 5) / 100;
-
-  return {
-    toolAccuracy: hasToolUsage ? clamp(base + toolOffset + jitter()) : 0,
-    empathy: clamp(base + empathyOffset + jitter()),
-    factualCorrectness: clamp(base + factualOffset + jitter()),
-    completeness: clamp(base + completeOffset + jitter()),
-    safetyCompliance: clamp(base + safetyOffset + jitter()),
-  };
 }
 
 /**
@@ -141,13 +103,18 @@ function mapGalileoScoresToEvalMetrics(
 // Galileo SDK integration
 // ---------------------------------------------------------------------------
 
+type GalileoResult =
+  | { status: "success"; metrics: EvalMetrics; traceId: string }
+  | { status: "no_api_key" }
+  | { status: "failed"; traceId: string | null; error: string };
+
 async function evaluateWithGalileo(
   messages: ConversationMessage[],
   modelId: string
-): Promise<{ metrics: EvalMetrics; traceId: string } | null> {
+): Promise<GalileoResult> {
   const apiKey = process.env.GALILEO_API_KEY;
   if (!apiKey) {
-    return null;
+    return { status: "no_api_key" };
   }
 
   try {
@@ -215,7 +182,7 @@ async function evaluateWithGalileo(
     // Poll for results with a short delay.
     const project = await getProject({ name: GALILEO_PROJECT });
     if (!project?.id) {
-      return { metrics: generateSimulatedMetrics(modelId, messages), traceId };
+      throw new Error(`Galileo project "${GALILEO_PROJECT}" not found — cannot score without project ID`);
     }
 
     const logStream = await getLogStream({
@@ -225,7 +192,7 @@ async function evaluateWithGalileo(
 
     // Wait for scoring (scorers typically complete within 5-30 seconds)
     let scorerResults: Record<string, number> | null = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       await new Promise((r) => setTimeout(r, 5000)); // 5s between polls
 
       const traceResults = await getTraces({
@@ -253,14 +220,15 @@ async function evaluateWithGalileo(
 
     if (scorerResults) {
       const metrics = mapGalileoScoresToEvalMetrics(scorerResults);
-      return { metrics, traceId };
+      return { status: "success", metrics, traceId };
     }
 
-    // Fallback to simulated if scoring hasn't completed
-    return { metrics: generateSimulatedMetrics(modelId, messages), traceId };
+    // Scorer results not ready after polling
+    return { status: "failed", traceId, error: `Galileo scorer results not available after polling for trace ${traceId}` };
   } catch (error) {
-    console.error("Galileo evaluation failed:", error);
-    return null;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Galileo evaluation failed:", message);
+    return { status: "failed", traceId: null, error: message };
   }
 }
 
@@ -291,18 +259,21 @@ export const evaluateSession = action({
 
     const galileoResult = await evaluateWithGalileo(messages, session.modelId);
 
-    let metrics: EvalMetrics;
-    let traceId: string | undefined;
-
-    if (galileoResult) {
-      metrics = galileoResult.metrics;
-      traceId = galileoResult.traceId;
-    } else {
-      metrics = generateSimulatedMetrics(session.modelId, messages);
+    if (galileoResult.status === "no_api_key") {
+      console.log(`Galileo API key not configured — skipping evaluation for session ${args.sessionId}`);
+      return { overallScore: 0, metrics: { toolAccuracy: 0, empathy: 0, factualCorrectness: 0, completeness: 0, safetyCompliance: 0 }, galileoConsoleUrl: null };
     }
 
+    if (galileoResult.status === "failed") {
+      console.warn(`Galileo evaluation failed for session ${args.sessionId}: ${galileoResult.error} — skipping scoring`);
+      return { overallScore: 0, metrics: { toolAccuracy: 0, empathy: 0, factualCorrectness: 0, completeness: 0, safetyCompliance: 0 }, galileoConsoleUrl: null };
+    }
+
+    const metrics = galileoResult.metrics;
+    const traceId = galileoResult.traceId;
+
     const overallScore = computeOverallScore(metrics);
-    const consoleUrl = traceId ? generateConsoleUrl(traceId) : null;
+    const consoleUrl = generateConsoleUrl(traceId);
 
     const failureAnalysis: string[] = [];
     if (metrics.toolAccuracy < 0.5)
@@ -321,7 +292,7 @@ export const evaluateSession = action({
       overallScore,
       metrics,
       galileoTraceId: traceId,
-      galileoConsoleUrl: consoleUrl ?? undefined,
+      galileoConsoleUrl: consoleUrl,
       failureAnalysis: failureAnalysis.length > 0 ? failureAnalysis : undefined,
     });
 

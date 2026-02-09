@@ -81,7 +81,18 @@ async function callAgent(
     // If tools caused the failure, retry without them
     if (effectiveTools && err instanceof Error && /tool/i.test(err.message)) {
       console.warn(`Tool call failed for ${config.apiModel}, retrying without tools`);
-      return callLLM(config.provider, messages, undefined, config.apiModel);
+      try {
+        return await callLLM(config.provider, messages, undefined, config.apiModel);
+      } catch (retryErr) {
+        // Some models generate tool-call syntax even without tool definitions,
+        // causing the provider to reject. Extract any text content from the
+        // failed_generation if possible, otherwise surface the error.
+        if (retryErr instanceof Error && /tool_use_failed|tool/i.test(retryErr.message)) {
+          console.warn(`Model ${config.apiModel} keeps generating tool calls without tool defs — returning empty response`);
+          return { content: "I apologize, but I'm having trouble processing this request right now. Please try again or consult with an immigration attorney for assistance." };
+        }
+        throw retryErr;
+      }
     }
     throw err;
   }

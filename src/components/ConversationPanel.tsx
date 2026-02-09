@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   IconUser,
   IconRobot,
@@ -118,8 +119,19 @@ export function ConversationPanel({
                       </span>
                     </div>
                     {msg.role !== "system" ? (
-                      <div className="prose prose-sm mt-0.5 max-w-none text-sm prose-headings:mb-1 prose-headings:mt-2 prose-headings:text-sm prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <div className="prose prose-sm mt-0.5 max-w-none text-sm prose-headings:mb-1 prose-headings:mt-2 prose-headings:text-sm prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            table: ({ children, ...props }) => (
+                              <div className="overflow-x-auto -mx-1">
+                                <table {...props} className="min-w-full text-xs">{children}</table>
+                              </div>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
                       </div>
                     ) : (
                       <p className="mt-0.5 text-xs text-muted-foreground italic">

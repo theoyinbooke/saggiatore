@@ -1,3 +1,4 @@
+import { IconLoader2 } from "@tabler/icons-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type {
@@ -28,6 +29,8 @@ function getPhaseIndex(status: CustomEvaluationStatus): number {
       return 2;
     case "completed":
       return 3;
+    case "cancelled":
+      return 1;
     default:
       return -1;
   }
@@ -65,7 +68,8 @@ export default function EvaluationProgress({
               <span
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                  isActive && "bg-primary text-primary-foreground animate-pulse",
+                  isActive && status !== "cancelled" && "bg-primary text-primary-foreground animate-pulse",
+                  isActive && status === "cancelled" && "bg-amber-100 text-amber-700",
                   isComplete && "bg-primary/20 text-primary",
                   !isActive && !isComplete && "bg-muted text-muted-foreground"
                 )}
@@ -88,10 +92,26 @@ export default function EvaluationProgress({
         </div>
       )}
 
-      {/* Evaluating */}
+      {/* Evaluating — Galileo scoring in progress */}
       {status === "evaluating" && (
-        <p className="text-sm text-muted-foreground">
-          Computing scores and building leaderboard...
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <IconLoader2 className="h-4 w-4 animate-spin text-primary" />
+            <p className="text-sm font-medium">
+              Scoring with Galileo
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Galileo is evaluating each session against your metrics. This
+            typically takes 1–3 minutes. Results will appear automatically once
+            scoring is complete.
+          </p>
+        </div>
+      )}
+
+      {status === "cancelled" && (
+        <p className="text-sm font-medium text-amber-600">
+          Evaluation was cancelled
         </p>
       )}
     </div>

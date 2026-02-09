@@ -90,6 +90,63 @@ export const generateEvaluationConfig = action({
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
+      // Phase 1: Fast title generation (~1-3s) — non-critical, wrapped in try/catch
+      try {
+        const titlePrompt = `Given this LLM use case description, output ONLY a JSON object with three fields:
+- "evaluationTitle": a concise 5-10 word title summarizing the evaluation purpose
+- "domain": a short snake_case domain identifier
+- "galileoProjectSlug": a short kebab-case project slug (3-5 words)
+
+Use case: ${evaluation.useCaseDescription}
+
+Output ONLY raw JSON, no markdown or explanation.`;
+
+        const titleRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            "X-Title": "Saggiatore Custom Eval Generator",
+          },
+          body: JSON.stringify({
+            model: "anthropic/claude-haiku-4.5",
+            messages: [
+              { role: "user", content: titlePrompt },
+            ],
+            temperature: 0.5,
+            max_tokens: 200,
+          }),
+        });
+
+        if (titleRes.ok) {
+          const titleData = await titleRes.json();
+          const titleContent = titleData.choices?.[0]?.message?.content;
+          if (titleContent) {
+            let titleJson = titleContent.trim();
+            const fenceMatch = titleJson.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (fenceMatch) titleJson = fenceMatch[1].trim();
+            if (!titleJson.startsWith("{")) {
+              const braceStart = titleJson.indexOf("{");
+              const braceEnd = titleJson.lastIndexOf("}");
+              if (braceStart !== -1 && braceEnd > braceStart) {
+                titleJson = titleJson.slice(braceStart, braceEnd + 1);
+              }
+            }
+            const parsed = JSON.parse(titleJson);
+            if (parsed.evaluationTitle) {
+              await ctx.runMutation(
+                internal.customEvaluationsHelpers.internalUpdateTitle,
+                { id: args.evaluationId, title: parsed.evaluationTitle }
+              );
+            }
+          }
+        }
+      } catch (titleErr) {
+        // Phase 1 is non-critical — full generation will set the title as a fallback
+        console.warn("Fast title generation failed (non-critical):", titleErr);
+      }
+
+      // Phase 2: Full config generation (existing logic)
       const userPrompt = `Generate an evaluation framework for the following use case:
 
 Title: ${evaluation.title}

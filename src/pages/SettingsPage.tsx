@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +30,24 @@ import {
   IconX,
   IconSearch,
   IconAlertCircle,
+  IconCpu,
+  IconSettings2,
+  IconTrash,
 } from "@tabler/icons-react";
-import { MAX_ENABLED_MODELS } from "@/lib/constants";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  MAX_ENABLED_MODELS,
+  CATEGORY_DISPLAY_NAMES,
+  COMPLEXITY_COLORS,
+} from "@/lib/constants";
+import { getModelDisplayName } from "@/lib/models";
 import type { ModelRegistryEntry } from "@/lib/types";
+
+type Section = "models" | "general";
+
+/* ------------------------------------------------------------------ */
+/*  Shared sub-components                                              */
+/* ------------------------------------------------------------------ */
 
 function EnabledModelChip({
   model,
@@ -162,9 +177,14 @@ function ModelTable({
   );
 }
 
-export function SettingsPage() {
+/* ------------------------------------------------------------------ */
+/*  Models Section                                                     */
+/* ------------------------------------------------------------------ */
+
+function ModelsSection() {
   const rawModels = useQuery(api.modelRegistry.list);
-  const models: ModelRegistryEntry[] = (rawModels as ModelRegistryEntry[] | undefined) ?? [];
+  const models: ModelRegistryEntry[] =
+    (rawModels as ModelRegistryEntry[] | undefined) ?? [];
 
   const fetchModels = useAction(api.modelDiscovery.fetchModels);
   const toggleModel = useMutation(api.modelRegistry.toggleModel);
@@ -215,15 +235,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div>
-      <PageHeader
-        title="Settings"
-        stats={[
-          { label: "Total Models", value: models.length },
-          { label: "Enabled", value: enabledCount },
-        ]}
-      />
-
+    <>
       {/* Enabled Models Strip */}
       <div className="mb-6">
         <div className="mb-2 flex items-center justify-between">
@@ -356,6 +368,285 @@ export function SettingsPage() {
           )}
         </TabsContent>
       </Tabs>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Ran Scenarios Manager                                              */
+/* ------------------------------------------------------------------ */
+
+function RanScenariosManager() {
+  const ranScenarios = useQuery(api.settingsAdmin.listRanScenarios) ?? [];
+  const deleteScenarioData = useMutation(api.settingsAdmin.deleteScenarioData);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmScenario, setConfirmScenario] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+
+  const handleDelete = async () => {
+    if (!confirmScenario) return;
+    setDeletingId(confirmScenario.id);
+    try {
+      await deleteScenarioData({
+        scenarioId: confirmScenario.id as any,
+      });
+    } finally {
+      setDeletingId(null);
+      setConfirmScenario(null);
+    }
+  };
+
+  if (ranScenarios.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        No scenarios have been run yet.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Scenario</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead>Complexity</TableHead>
+            <TableHead className="text-center">Sessions</TableHead>
+            <TableHead>Models</TableHead>
+            <TableHead className="text-center">Evaluated</TableHead>
+            <TableHead className="w-16"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {ranScenarios.map((scenario) => (
+            <TableRow key={scenario._id}>
+              <TableCell className="font-medium max-w-[200px] truncate">
+                {scenario.title}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline">
+                  {CATEGORY_DISPLAY_NAMES[
+                    scenario.category as keyof typeof CATEGORY_DISPLAY_NAMES
+                  ] ?? scenario.category}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant="outline"
+                  className={
+                    COMPLEXITY_COLORS[scenario.complexity] ?? ""
+                  }
+                >
+                  {scenario.complexity}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center text-sm">
+                {scenario.completedSessions}/{scenario.totalSessions}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <Badge variant="secondary" className="text-xs">
+                    {getModelDisplayName(scenario.modelIds[0])}
+                  </Badge>
+                  {scenario.modelIds.length > 1 && (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className="text-xs cursor-default">
+                            +{scenario.modelIds.length - 1}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[240px]">
+                          <div className="flex flex-wrap gap-1">
+                            {scenario.modelIds.slice(1).map((id) => (
+                              <span key={id} className="text-xs">
+                                {getModelDisplayName(id)}
+                              </span>
+                            ))}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge
+                  variant="outline"
+                  className={
+                    scenario.hasEvaluations
+                      ? "border-green-300 bg-green-50 text-green-700"
+                      : "border-gray-300 bg-gray-50 text-gray-500"
+                  }
+                >
+                  {scenario.hasEvaluations ? "Yes" : "No"}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  disabled={deletingId === scenario._id}
+                  onClick={() =>
+                    setConfirmScenario({
+                      id: scenario._id,
+                      title: scenario.title,
+                    })
+                  }
+                >
+                  <IconTrash className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      <ConfirmDialog
+        open={!!confirmScenario}
+        onOpenChange={(open) => {
+          if (!open) setConfirmScenario(null);
+        }}
+        onConfirm={handleDelete}
+        title="Delete Scenario Data"
+        description={`This will delete all sessions, messages, and evaluations for "${confirmScenario?.title ?? ""}". The scenario definition will remain available for future runs. Leaderboard scores will be recalculated.`}
+        confirmText="Delete Data"
+        variant="destructive"
+      />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  General Section                                                    */
+/* ------------------------------------------------------------------ */
+
+function GeneralSection() {
+  const clearDemoResults = useMutation(api.seed.clearDemoResults);
+  const [showClearResults, setShowClearResults] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  async function handleConfirmClearResults() {
+    setClearing(true);
+    try {
+      await clearDemoResults();
+    } finally {
+      setClearing(false);
+      setShowClearResults(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Clear Demo Results */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Clear Demo Results</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Remove all simulated evaluation sessions, messages, scores, and
+            leaderboard entries. Reference data (personas, tools, scenarios) will
+            be kept.
+          </p>
+          <Button
+            variant="destructive"
+            onClick={() => setShowClearResults(true)}
+            disabled={clearing}
+          >
+            {clearing ? "Clearing..." : "Clear Demo Results"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Ran Scenarios */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ran Scenarios</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RanScenariosManager />
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={showClearResults}
+        onOpenChange={setShowClearResults}
+        onConfirm={handleConfirmClearResults}
+        title="Clear Demo Results"
+        description="This will delete all evaluation sessions, messages, scores, and leaderboard entries. Personas, tools, and scenarios will be preserved. You can regenerate results by running batchRunner:populateEvaluations."
+        confirmText="Clear Results"
+        variant="destructive"
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Settings Page                                                 */
+/* ------------------------------------------------------------------ */
+
+const SIDEBAR_ITEMS: { key: Section; label: string; icon: typeof IconCpu }[] = [
+  { key: "models", label: "Models", icon: IconCpu },
+  { key: "general", label: "General", icon: IconSettings2 },
+];
+
+export function SettingsPage() {
+  const [activeSection, setActiveSection] = useState<Section>("models");
+
+  const rawModels = useQuery(api.modelRegistry.list);
+  const models: ModelRegistryEntry[] =
+    (rawModels as ModelRegistryEntry[] | undefined) ?? [];
+  const enabledCount = models.filter((m) => m.enabled).length;
+
+  const ranScenarios = useQuery(api.settingsAdmin.listRanScenarios) ?? [];
+
+  const stats =
+    activeSection === "models"
+      ? [
+          { label: "Total Models", value: models.length },
+          { label: "Enabled", value: enabledCount },
+        ]
+      : [
+          { label: "Ran Scenarios", value: ranScenarios.length },
+        ];
+
+  return (
+    <div>
+      <PageHeader title="Settings" stats={stats} />
+
+      <div className="flex gap-6">
+        {/* Sidebar */}
+        <aside className="w-56 shrink-0">
+          <nav className="flex flex-col gap-1">
+            {SIDEBAR_ITEMS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveSection(key)}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  activeSection === key
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          {activeSection === "models" && <ModelsSection />}
+          {activeSection === "general" && <GeneralSection />}
+        </div>
+      </div>
     </div>
   );
 }
