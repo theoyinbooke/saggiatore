@@ -51,7 +51,7 @@ export function App() {
   return (
     <div className="min-h-screen bg-background">
       {!isSharedView && <TopBar />}
-      <main className={isSharedView ? "" : "mx-auto max-w-6xl px-6 pb-24"}>
+      <main className={isSharedView ? "" : "mx-auto max-w-6xl px-6 pt-8 pb-24"}>
         <Routes>
           <Route path="/" element={<LeaderboardPage />} />
           <Route path="/personas" element={<PersonaExplorerPage />} />
