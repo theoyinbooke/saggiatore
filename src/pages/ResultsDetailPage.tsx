@@ -16,6 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@/components/ui/combobox";
+import {
   Table,
   TableBody,
   TableCell,
@@ -96,13 +104,16 @@ function SessionListView() {
   const rawAllModels = useQuery(api.modelRegistry.list);
   const allModels: ModelRegistryEntry[] = useMemo(() => {
     const raw = (rawAllModels as ModelRegistryEntry[] | undefined) ?? [];
+    // Only include models that have at least one session
+    const modelsWithSessions = new Set(sessions.map((s) => s.modelId));
     const seen = new Set<string>();
     return raw.filter((m) => {
+      if (!modelsWithSessions.has(m.modelId)) return false;
       if (seen.has(m.modelId)) return false;
       seen.add(m.modelId);
       return true;
     });
-  }, [rawAllModels]);
+  }, [rawAllModels, sessions]);
 
   const scenarioMap = new Map(scenarios.map((s) => [s._id, s]));
   const evalMap = new Map(evaluations.map((e) => [e.sessionId, e]));
@@ -177,19 +188,27 @@ function SessionListView() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Model</label>
-          <Select value={filterModel} onValueChange={setFilterModel}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Models</SelectItem>
-              {allModels.map((m) => (
-                <SelectItem key={m.modelId} value={m.modelId}>
-                  {m.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={filterModel}
+            onValueChange={(v) => setFilterModel(v ?? "all")}
+            itemToStringLabel={(val: string) => {
+              if (val === "all") return "All Models";
+              return allModels.find((m) => m.modelId === val)?.displayName ?? val;
+            }}
+          >
+            <ComboboxInput placeholder="Search models..." className="w-56" />
+            <ComboboxContent>
+              <ComboboxList>
+                <ComboboxItem value="all">All Models</ComboboxItem>
+                {allModels.map((m) => (
+                  <ComboboxItem key={m.modelId} value={m.modelId}>
+                    {m.displayName}
+                  </ComboboxItem>
+                ))}
+              </ComboboxList>
+              <ComboboxEmpty>No models found.</ComboboxEmpty>
+            </ComboboxContent>
+          </Combobox>
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Status</label>
