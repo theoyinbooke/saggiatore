@@ -16,13 +16,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxList,
-  ComboboxItem,
-  ComboboxEmpty,
-} from "@/components/ui/combobox";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 import {
   Table,
   TableBody,
@@ -34,7 +39,7 @@ import {
 import { CATEGORY_DISPLAY_NAMES, getScoreTailwind } from "@/lib/constants";
 import { getModelDisplayName, getModelColor } from "@/lib/models";
 import { formatDuration as formatDurationMs, formatDate as formatTimestamp } from "@/lib/utils";
-import { IconArrowLeft, IconArrowsSort, IconSortAscending, IconSortDescending } from "@tabler/icons-react";
+import { IconArrowLeft, IconArrowsSort, IconSortAscending, IconSortDescending, IconChevronDown } from "@tabler/icons-react";
 import type {
   Session,
   Message,
@@ -87,6 +92,7 @@ function SessionListView() {
   const initialModel = searchParams.get("model") ?? "all";
   const [filterModel, setFilterModel] = useState(initialModel);
   const [filterStatus, setFilterStatus] = useState("all");
+  const [modelFilterOpen, setModelFilterOpen] = useState(false);
 
   // Sorting
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -188,27 +194,54 @@ function SessionListView() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Model</label>
-          <Combobox
-            value={filterModel}
-            onValueChange={(v) => setFilterModel(v ?? "all")}
-            itemToStringLabel={(val: string) => {
-              if (val === "all") return "All Models";
-              return allModels.find((m) => m.modelId === val)?.displayName ?? val;
-            }}
-          >
-            <ComboboxInput placeholder="Search models..." className="w-56" />
-            <ComboboxContent>
-              <ComboboxList>
-                <ComboboxItem value="all">All Models</ComboboxItem>
-                {allModels.map((m) => (
-                  <ComboboxItem key={m.modelId} value={m.modelId}>
-                    {m.displayName}
-                  </ComboboxItem>
-                ))}
-              </ComboboxList>
-              <ComboboxEmpty>No models found.</ComboboxEmpty>
-            </ComboboxContent>
-          </Combobox>
+          <Popover open={modelFilterOpen} onOpenChange={setModelFilterOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="border-input bg-background flex h-9 w-56 items-center justify-between rounded-md border px-3 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="truncate">
+                  {filterModel === "all"
+                    ? "All Models"
+                    : allModels.find((m) => m.modelId === filterModel)?.displayName ?? filterModel}
+                </span>
+                <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search models..." />
+                <CommandList>
+                  <CommandEmpty>No models found.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="all"
+                      data-checked={filterModel === "all"}
+                      onSelect={() => {
+                        setFilterModel("all");
+                        setModelFilterOpen(false);
+                      }}
+                    >
+                      All Models
+                    </CommandItem>
+                    {allModels.map((m) => (
+                      <CommandItem
+                        key={m.modelId}
+                        value={m.displayName}
+                        data-checked={filterModel === m.modelId}
+                        onSelect={() => {
+                          setFilterModel(m.modelId);
+                          setModelFilterOpen(false);
+                        }}
+                      >
+                        {m.displayName}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Status</label>
