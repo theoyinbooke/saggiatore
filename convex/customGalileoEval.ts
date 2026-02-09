@@ -328,16 +328,32 @@ export const evaluateCustomSession = internalAction({
         (s: { id: string }) => s.id === session.scenarioLocalId
       );
 
-      // Galileo is the only scoring mechanism — skip if config is missing
+      // Galileo is the only scoring mechanism — store zeros if config is missing
       if (
         !args.galileoApiKey ||
         !evaluation.galileoProjectName ||
         !evaluation.galileoLogStreamName ||
         !evaluation.galileoMetricMapping
       ) {
-        console.log(`Skipping evaluation for session ${sessionId}: Galileo config missing`);
-        return;
-      }
+        console.log(`Galileo config missing for session ${sessionId} — storing zero scores`);
+        const zeroScores: Record<string, number> = {};
+        for (const m of metrics) zeroScores[m.key] = 0;
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeSessionEvaluation,
+          {
+            sessionId,
+            evaluationId,
+            overallScore: 0,
+            metricScores: zeroScores,
+            categoryScore: scenario
+              ? { category: scenario.category, score: 0 }
+              : undefined,
+            failureAnalysis: ["Galileo configuration missing — no API key or project setup"],
+            scoringSource: "error",
+          }
+        );
+        // Don't return — need to reach finalization check below.
+      } else {
 
       const result = await evaluateWithGalileo(
         messages,
@@ -353,46 +369,69 @@ export const evaluateCustomSession = internalAction({
       );
       const { metricScores, traceId: galileoTraceId, consoleUrl: galileoConsoleUrl, scoringSource } = result;
 
-      // If Galileo hasn't finished scoring yet, skip storing — no fake scores
+      // If Galileo hasn't finished scoring yet, store zeros so the finalization
+      // counter includes this session (finalizeEvaluation triggers only when
+      // all sessions have stored evaluations).
       if (scoringSource === "pending_galileo") {
         console.log(
-          `Session ${sessionId}: Galileo scores still computing. Trace ingested (${galileoTraceId}). Skipping score storage.`
+          `Session ${sessionId}: Galileo scores still computing. Trace ingested (${galileoTraceId}). Storing pending record.`
         );
-        return;
-      }
+        const zeroScores: Record<string, number> = {};
+        for (const m of metrics) zeroScores[m.key] = 0;
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeSessionEvaluation,
+          {
+            sessionId,
+            evaluationId,
+            overallScore: 0,
+            metricScores: zeroScores,
+            categoryScore: scenario
+              ? { category: scenario.category, score: 0 }
+              : undefined,
+            failureAnalysis: [
+              `Galileo scores still computing. Check Galileo Console for final results.`,
+            ],
+            galileoTraceId,
+            galileoConsoleUrl,
+            scoringSource: "pending_galileo",
+          }
+        );
+        // Fall through to finalization check below
+      } else {
+        // Compute overall score as weighted average
+        const overallScore = computeWeightedScore(metricScores, metrics);
 
-      // Compute overall score as weighted average
-      const overallScore = computeWeightedScore(metricScores, metrics);
+        const categoryScore = scenario
+          ? { category: scenario.category, score: overallScore }
+          : undefined;
 
-      const categoryScore = scenario
-        ? { category: scenario.category, score: overallScore }
-        : undefined;
-
-      // Generate failure analysis for any metric < 0.5
-      const failureAnalysis: string[] = [];
-      for (const m of metrics) {
-        if ((metricScores[m.key] ?? 0) < 0.5) {
-          failureAnalysis.push(
-            `Low ${m.displayName} (${(metricScores[m.key] ?? 0).toFixed(2)}) — ${m.description}`
-          );
+        // Generate failure analysis for any metric < 0.5
+        const failureAnalysis: string[] = [];
+        for (const m of metrics) {
+          if ((metricScores[m.key] ?? 0) < 0.5) {
+            failureAnalysis.push(
+              `Low ${m.displayName} (${(metricScores[m.key] ?? 0).toFixed(2)}) — ${m.description}`
+            );
+          }
         }
-      }
 
-      // Store evaluation
-      await ctx.runMutation(
-        internal.customGalileoEvalHelpers.storeSessionEvaluation,
-        {
-          sessionId,
-          evaluationId,
-          overallScore,
-          metricScores,
-          categoryScore,
-          failureAnalysis: failureAnalysis.length > 0 ? failureAnalysis : undefined,
-          galileoTraceId,
-          galileoConsoleUrl,
-          scoringSource: "galileo",
-        }
-      );
+        // Store evaluation
+        await ctx.runMutation(
+          internal.customGalileoEvalHelpers.storeSessionEvaluation,
+          {
+            sessionId,
+            evaluationId,
+            overallScore,
+            metricScores,
+            categoryScore,
+            failureAnalysis: failureAnalysis.length > 0 ? failureAnalysis : undefined,
+            galileoTraceId,
+            galileoConsoleUrl,
+            scoringSource: "galileo",
+          }
+        );
+      }
+      } // end else (Galileo config present)
     } catch (error) {
       console.error("Custom session evaluation failed:", error);
 
@@ -433,6 +472,40 @@ export const evaluateCustomSession = internalAction({
           }
         );
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // Finalization trigger — schedule finalizeEvaluation once ALL sessions
+    // have stored their evaluation records (success, pending, or error).
+    // This runs after Galileo polling completes, not after session status
+    // changes, so leaderboard aggregation sees real scores.
+    // -----------------------------------------------------------------------
+    try {
+      const allSessions = await ctx.runQuery(
+        internal.customGalileoEvalHelpers.getSessionsByEvaluation,
+        { evaluationId }
+      );
+      const allEvals = await ctx.runQuery(
+        internal.customGalileoEvalHelpers.getAllSessionEvaluations,
+        { evaluationId }
+      );
+
+      console.log(
+        `Finalization check: ${allEvals.length}/${allSessions.length} session evaluations stored`
+      );
+
+      if (allEvals.length >= allSessions.length && allSessions.length > 0) {
+        console.log(
+          `All ${allSessions.length} session evaluations stored — scheduling finalization`
+        );
+        await ctx.scheduler.runAfter(
+          500,
+          internal.customGalileoEval.finalizeEvaluation,
+          { evaluationId }
+        );
+      }
+    } catch (finCheckErr) {
+      console.warn("Finalization check failed (will be retried by next session):", finCheckErr);
     }
   },
 });

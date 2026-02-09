@@ -669,18 +669,8 @@ async function scheduleProgressAndFinalizationCheck(
     }
   );
 
-  const allDone = allSessions.every(
-    (s) =>
-      s.status === "completed" ||
-      s.status === "failed" ||
-      s.status === "cancelled"
-  );
-
-  if (allDone) {
-    await ctx.scheduler.runAfter(
-      500,
-      internal.customGalileoEval.finalizeEvaluation,
-      { evaluationId }
-    );
-  }
+  // NOTE: Finalization is triggered by evaluateCustomSession (after Galileo
+  // scoring completes), NOT here. Session status becomes "completed" before
+  // Galileo polling finishes, so triggering finalization from session status
+  // would aggregate scores that haven't been stored yet.
 }
