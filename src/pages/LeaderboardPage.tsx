@@ -19,7 +19,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown, IconTrophy } from "@tabler/icons-react";
 import { type MetricKey, CATEGORY_DISPLAY_NAMES, type ScenarioCategory } from "@/lib/constants";
 import type { LeaderboardEntry, Scenario, Tool } from "@/lib/types";
 
@@ -110,6 +110,14 @@ export function LeaderboardPage() {
 
   return (
     <div>
+      {/* Leaderboard summary banner */}
+      <div className="mb-6 flex items-center gap-3 rounded-lg bg-red-600 px-4 py-2.5 text-white shadow-sm">
+        <IconTrophy className="h-5 w-5 shrink-0 text-red-200" />
+        <p className="text-sm font-medium leading-snug">
+          Compare AI model performance across real-world customer service scenarios — ranked by accuracy, empathy, safety, and more.
+        </p>
+      </div>
+
       <PageHeader
         title="Leaderboard"
         stats={[
