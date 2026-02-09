@@ -7,15 +7,19 @@ import { CategoryBreakdown } from "@/components/CategoryBreakdown";
 import { ScenarioContextViewer } from "@/components/ScenarioContextViewer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxList,
-  ComboboxItem,
-  ComboboxGroup,
-  ComboboxLabel,
-  ComboboxEmpty,
-} from "@/components/ui/combobox";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { IconChevronDown } from "@tabler/icons-react";
 import { type MetricKey, CATEGORY_DISPLAY_NAMES, type ScenarioCategory } from "@/lib/constants";
 import type { LeaderboardEntry, Scenario, Tool } from "@/lib/types";
 
@@ -38,6 +42,7 @@ export function LeaderboardPage() {
     "overall"
   );
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("all");
+  const [scenarioFilterOpen, setScenarioFilterOpen] = useState(false);
 
   // Fetch scenario-filtered leaderboard when a specific scenario is selected
   const rawScenarioLeaderboard = useQuery(
@@ -115,34 +120,58 @@ export function LeaderboardPage() {
         ]}
         action={
           <>
-            <Combobox
-              value={selectedScenarioId}
-              onValueChange={(v) => setSelectedScenarioId(v ?? "all")}
-              itemToStringLabel={(val: string) => {
-                if (val === "all") return "All Scenarios";
-                return scenarios.find((s) => s._id === val)?.title ?? val;
-              }}
-            >
-              <ComboboxInput placeholder="Search scenarios..." className="w-64" />
-              <ComboboxContent>
-                <ComboboxList>
-                  <ComboboxItem value="all">All Scenarios</ComboboxItem>
-                  {Object.entries(scenariosByCategory).map(([cat, items]) => (
-                    <ComboboxGroup key={cat}>
-                      <ComboboxLabel>
-                        {CATEGORY_DISPLAY_NAMES[cat as ScenarioCategory] ?? cat}
-                      </ComboboxLabel>
-                      {items.map((s) => (
-                        <ComboboxItem key={s._id} value={s._id}>
-                          {s.title}
-                        </ComboboxItem>
-                      ))}
-                    </ComboboxGroup>
-                  ))}
-                </ComboboxList>
-                <ComboboxEmpty>No scenarios found.</ComboboxEmpty>
-              </ComboboxContent>
-            </Combobox>
+            <Popover open={scenarioFilterOpen} onOpenChange={setScenarioFilterOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="border-input bg-background flex h-9 w-64 items-center justify-between rounded-md border px-3 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground"
+                >
+                  <span className="truncate">
+                    {selectedScenarioId === "all"
+                      ? "All Scenarios"
+                      : scenarios.find((s) => s._id === selectedScenarioId)?.title ?? selectedScenarioId}
+                  </span>
+                  <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search scenarios..." />
+                  <CommandList>
+                    <CommandEmpty>No scenarios found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all-scenarios"
+                        data-checked={selectedScenarioId === "all"}
+                        onSelect={() => {
+                          setSelectedScenarioId("all");
+                          setScenarioFilterOpen(false);
+                        }}
+                      >
+                        All Scenarios
+                      </CommandItem>
+                    </CommandGroup>
+                    {Object.entries(scenariosByCategory).map(([cat, items]) => (
+                      <CommandGroup key={cat} heading={CATEGORY_DISPLAY_NAMES[cat as ScenarioCategory] ?? cat}>
+                        {items.map((s) => (
+                          <CommandItem
+                            key={s._id}
+                            value={s.title}
+                            data-checked={selectedScenarioId === s._id}
+                            onSelect={() => {
+                              setSelectedScenarioId(s._id);
+                              setScenarioFilterOpen(false);
+                            }}
+                          >
+                            {s.title}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {filterCategory && (
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {CATEGORY_DISPLAY_NAMES[filterCategory]}
