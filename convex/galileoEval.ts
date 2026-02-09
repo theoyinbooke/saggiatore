@@ -67,27 +67,57 @@ function generateConsoleUrl(traceId: string): string {
 function mapGalileoScoresToEvalMetrics(
   scores: Record<string, number>
 ): EvalMetrics {
-  const get = (key: string, fallback = 0.75) => scores[key] ?? fallback;
+  // Galileo returns camelCase keys (e.g. toolErrorRate, toxicityGpt).
+  // Look up by multiple possible key names, returning the first match.
+  // Returns null when no key matches — callers handle missing metrics explicitly.
+  const get = (keys: string[], fallback: number | null = null): number | null => {
+    for (const k of keys) {
+      if (scores[k] !== undefined) return scores[k];
+    }
+    return fallback;
+  };
+
+  // Track which metrics came from Galileo vs were derived
+  const sourced: string[] = [];
+  const derived: string[] = [];
 
   // toolAccuracy: combine selection quality and invert error rate
-  const selectionQuality = get('tool_selection_quality');
-  const errorRate = get('tool_error_rate', 0.1);
+  const selectionQualityRaw = get(['toolSelectionQuality', 'tool_selection_quality']);
+  const errorRateRaw = get(['toolErrorRate', 'tool_error_rate']);
+  const selectionQuality = selectionQualityRaw ?? 0.75;
+  const errorRate = errorRateRaw ?? 0.1;
   const toolAccuracy = (selectionQuality + (1 - errorRate)) / 2;
+  if (selectionQualityRaw !== null || errorRateRaw !== null) sourced.push('toolAccuracy');
+  else derived.push('toolAccuracy');
 
-  // empathy: custom scorer (boolean converted to 0/1)
-  const empathy = get('empathy', 0.75);
+  // factualCorrectness: from the correctness or factuality scorer
+  const factualCorrectnessRaw = get(['correctness', 'factuality']);
+  const factualCorrectness = factualCorrectnessRaw ?? 0.7;
+  if (factualCorrectnessRaw !== null) sourced.push('factualCorrectness');
+  else derived.push('factualCorrectness');
 
-  // factualCorrectness: from the correctness scorer
-  const factualCorrectness = get('correctness');
+  // empathy: custom scorer — derive from correlated metrics if missing
+  const empathyRaw = get(['empathy']);
+  const empathy = empathyRaw ?? get(['conversationQuality']) ?? factualCorrectness;
+  if (empathyRaw !== null) sourced.push('empathy');
+  else derived.push('empathy');
 
-  // completeness: from completeness scorer
-  const completeness = get('completeness');
+  // completeness: from completeness scorer — Galileo returns "completenessGpt"
+  const completenessRaw = get(['completeness', 'completenessGpt']);
+  const completeness = completenessRaw ?? factualCorrectness;
+  if (completenessRaw !== null) sourced.push('completeness');
+  else derived.push('completeness');
 
   // safetyCompliance: combine safety scorers (lower toxicity = higher safety)
-  const toxicity = get('output_toxicity', 0.05);
-  const pii = get('output_pii_gpt', 0.0);
-  const injection = get('prompt_injection', 0.05);
+  const toxicity = get(['toxicityGpt', 'output_toxicity', 'outputToxicity']) ?? 0.05;
+  const pii = get(['outputPiiGpt', 'output_pii_gpt']) ?? 0.0;
+  const injection = get(['promptInjectionGpt', 'prompt_injection', 'promptInjection']) ?? 0.05;
   const safetyCompliance = 1 - (toxicity + pii + injection) / 3;
+  if (get(['toxicityGpt', 'output_toxicity', 'outputToxicity']) !== null) sourced.push('safetyCompliance');
+  else derived.push('safetyCompliance');
+
+  console.log(`Galileo metric sources — real: [${sourced.join(', ')}], derived: [${derived.join(', ')}]`);
+  console.log(`Galileo raw scores: ${JSON.stringify(scores)}`);
 
   const clamp = (n: number) => Math.max(0, Math.min(1, n));
   return {
@@ -131,9 +161,15 @@ async function evaluateWithGalileo(
     const firstUserInput =
       userMessages[0]?.content ?? "Immigration consultation";
 
+    // Generate a unique trace name so we can find this trace later via getTraces.
+    // flush() does NOT return the Galileo-assigned trace ID, so we encode a
+    // unique suffix in the name and filter by it when polling.
+    const traceSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const traceName = `immigration-eval-${modelId}-${traceSuffix}`;
+
     logger.startTrace({
       input: firstUserInput,
-      name: `immigration-eval-${modelId}`,
+      name: traceName,
       tags: ["saggiatore", modelId, "immigration"],
       metadata: { modelId, totalMessages: String(messages.length) },
     });
@@ -174,8 +210,7 @@ async function evaluateWithGalileo(
       output: lastAssistant?.content ?? "",
     });
 
-    const traces = await logger.flush();
-    const traceId = (traces?.[0] as { id?: string } | undefined)?.id ?? `trace-${Date.now()}`;
+    await logger.flush();
 
     // --- Retrieve real scorer results ---
     // Galileo processes scorers asynchronously after ingestion.
@@ -190,15 +225,26 @@ async function evaluateWithGalileo(
       projectName: GALILEO_PROJECT,
     });
 
-    // Wait for scoring (scorers typically complete within 5-30 seconds)
+    // Poll for scorer results — Galileo LLM-based metrics can take 1-3 minutes
+    const MAX_ATTEMPTS = 12;
+    const POLL_INTERVAL_MS = 15_000; // 15 seconds between attempts (3 min total)
+
+    // Expected metric keys from Galileo (actual score keys, not *MetricCost/*NumJudges metadata)
+    const EXPECTED_METRIC_KEYS = [
+      'toolSelectionQuality', 'toolErrorRate',
+      'toxicityGpt', 'promptInjectionGpt',
+      'factuality',            // maps to factualCorrectness
+      'completenessGpt', 'empathy', // LLM-based, may take longer
+    ];
+
     let scorerResults: Record<string, number> | null = null;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((r) => setTimeout(r, 5000)); // 5s between polls
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
       const traceResults = await getTraces({
         projectId: project.id,
         logStreamId: logStream?.id,
-        filters: [{ columnId: 'id', operator: 'eq' as const, value: traceId, type: 'text' as const }],
+        filters: [{ columnId: 'name', operator: 'eq' as const, value: traceName, type: 'text' as const }],
         limit: 1,
       });
 
@@ -211,7 +257,26 @@ async function evaluateWithGalileo(
             numericMetrics[key] = val;
           }
         }
-        if (Object.keys(numericMetrics).length > 0) {
+
+        if (Object.keys(numericMetrics).length === 0) continue;
+
+        const foundExpected = EXPECTED_METRIC_KEYS.filter(k => numericMetrics[k] !== undefined);
+        const missingExpected = EXPECTED_METRIC_KEYS.filter(k => numericMetrics[k] === undefined);
+
+        console.log(
+          `Galileo poll attempt ${attempt + 1}/${MAX_ATTEMPTS}: found [${foundExpected.join(', ')}], missing [${missingExpected.join(', ')}]`
+        );
+
+        if (missingExpected.length === 0) {
+          // All expected metrics found — done
+          console.log(`All expected Galileo metrics retrieved on attempt ${attempt + 1}/${MAX_ATTEMPTS}`);
+          scorerResults = numericMetrics;
+          break;
+        }
+
+        if (attempt >= 3) {
+          // After 4+ attempts (~60s), accept partial results with a warning
+          console.log(`Accepting partial Galileo scores after ${attempt + 1} attempts (missing: ${missingExpected.join(', ')})`);
           scorerResults = numericMetrics;
           break;
         }
@@ -220,11 +285,14 @@ async function evaluateWithGalileo(
 
     if (scorerResults) {
       const metrics = mapGalileoScoresToEvalMetrics(scorerResults);
-      return { status: "success", metrics, traceId };
+      return { status: "success", metrics, traceId: traceName };
     }
 
     // Scorer results not ready after polling
-    return { status: "failed", traceId, error: `Galileo scorer results not available after polling for trace ${traceId}` };
+    console.log(
+      `Galileo scores not ready after ${MAX_ATTEMPTS} attempts (~${(MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s) for trace "${traceName}".`
+    );
+    return { status: "failed", traceId: traceName, error: `Galileo scorer results not available after polling for trace "${traceName}"` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Galileo evaluation failed:", message);

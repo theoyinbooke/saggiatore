@@ -39,6 +39,48 @@ interface ConversationMessage {
 }
 
 // ---------------------------------------------------------------------------
+// Known Galileo key aliases — the SDK enableMetrics name vs actual return key
+// ---------------------------------------------------------------------------
+
+const GALILEO_KEY_ALIASES: Record<string, string[]> = {
+  correctness: ['correctness', 'factuality'],
+  completeness: ['completeness', 'completenessGpt'],
+  tool_selection_quality: ['tool_selection_quality', 'toolSelectionQuality'],
+  tool_error_rate: ['tool_error_rate', 'toolErrorRate'],
+  output_toxicity: ['output_toxicity', 'toxicityGpt'],
+  output_pii_gpt: ['output_pii_gpt', 'outputPiiGpt'],
+  prompt_injection: ['prompt_injection', 'promptInjectionGpt'],
+  instruction_adherence: ['instruction_adherence', 'instructionAdherence'],
+  conversation_quality: ['conversation_quality', 'conversationQuality'],
+  agent_efficiency: ['agent_efficiency', 'agentEfficiency'],
+};
+
+function toCamelCase(s: string): string {
+  return s.replace(/_([a-zA-Z])/g, (_, c: string) => c.toUpperCase());
+}
+
+function lookupGalileoScore(
+  scorerResults: Record<string, number>,
+  galileoName: string
+): number | undefined {
+  // Direct lookup first
+  if (scorerResults[galileoName] !== undefined) return scorerResults[galileoName];
+  // Check known aliases
+  const aliases = GALILEO_KEY_ALIASES[galileoName];
+  if (aliases) {
+    for (const alias of aliases) {
+      if (scorerResults[alias] !== undefined) return scorerResults[alias];
+    }
+  }
+  // Dynamic camelCase fallback — Galileo converts custom metric names to camelCase
+  const camelCased = toCamelCase(galileoName);
+  if (camelCased !== galileoName && scorerResults[camelCased] !== undefined) {
+    return scorerResults[camelCased];
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -524,6 +566,28 @@ async function evaluateWithGalileo(
     const MAX_ATTEMPTS = 12;
     const POLL_INTERVAL_MS = 15_000; // 15 seconds between attempts (3 min total)
 
+    // Build expected metric keys from the evaluation's metricMapping,
+    // expanding each key with its known aliases so we detect either form.
+    const expectedGalileoKeys = metrics
+      .map(m => metricMapping[m.key]?.galileoName)
+      .filter(Boolean) as string[];
+
+    const allExpectedKeys = new Set<string>();
+    for (const key of expectedGalileoKeys) {
+      allExpectedKeys.add(key);
+      const aliases = GALILEO_KEY_ALIASES[key];
+      if (aliases) aliases.forEach(a => allExpectedKeys.add(a));
+    }
+
+    // Helper: check if at least one alias per original metric is found
+    function allMetricsFound(numericMetrics: Record<string, number>): boolean {
+      for (const galileoName of expectedGalileoKeys) {
+        if (lookupGalileoScore(numericMetrics, galileoName) !== undefined) continue;
+        return false;
+      }
+      return true;
+    }
+
     let scorerResults: Record<string, number> | null = null;
     let lastPollingError: string | null = null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -554,30 +618,45 @@ async function evaluateWithGalileo(
                 numericMetrics[key] = val;
               }
             }
-            if (Object.keys(numericMetrics).length > 0) {
-              console.log(
-                `Galileo scores retrieved on attempt ${attempt + 1}/${MAX_ATTEMPTS}:`,
-                Object.keys(numericMetrics).join(", ")
-              );
+
+            if (Object.keys(numericMetrics).length === 0) continue;
+
+            // Log found vs missing metrics each attempt
+            const foundKeys = expectedGalileoKeys.filter(k => lookupGalileoScore(numericMetrics, k) !== undefined);
+            const missingKeys = expectedGalileoKeys.filter(k => lookupGalileoScore(numericMetrics, k) === undefined);
+
+            console.log(
+              `Custom eval Galileo poll attempt ${attempt + 1}/${MAX_ATTEMPTS}: found [${foundKeys.join(', ')}], missing [${missingKeys.join(', ')}]`
+            );
+
+            if (allMetricsFound(numericMetrics)) {
+              // All expected metrics found — done
+              console.log(`All expected custom eval Galileo metrics retrieved on attempt ${attempt + 1}/${MAX_ATTEMPTS}`);
               scorerResults = numericMetrics;
               break;
             }
-          }
-          // Trace found but no metrics yet — keep polling
-          if (attempt % 3 === 2) {
+
+            if (attempt >= 3) {
+              // After 4+ attempts (~60s), accept partial results with a warning
+              console.log(`Accepting partial custom eval Galileo scores after ${attempt + 1} attempts (missing: ${missingKeys.join(', ')})`);
+              scorerResults = numericMetrics;
+              break;
+            }
+          } else if (attempt % 3 === 2) {
+            // Trace found but no metrics yet — keep polling
             console.log(
-              `Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace found, metrics not ready yet`
+              `Custom eval Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace found, metrics not ready yet`
             );
           }
         } else if (attempt % 3 === 2) {
           console.log(
-            `Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace not found yet`
+            `Custom eval Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS}: trace not found yet`
           );
         }
       } catch (pollErr) {
         lastPollingError =
           pollErr instanceof Error ? pollErr.message : String(pollErr);
-        console.warn(`Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS} failed:`, lastPollingError);
+        console.warn(`Custom eval Galileo polling attempt ${attempt + 1}/${MAX_ATTEMPTS} failed:`, lastPollingError);
       }
     }
 
@@ -593,25 +672,34 @@ async function evaluateWithGalileo(
     const metricScores: Record<string, number> = {};
     const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
+    const sourced: string[] = [];
+    const zeroed: string[] = [];
+
     for (const metric of metrics) {
       const mapping = metricMapping[metric.key];
       if (!mapping) {
         metricScores[metric.key] = 0;
+        zeroed.push(metric.key);
         continue;
       }
 
-      const rawScore = scorerResults[mapping.galileoName];
+      const rawScore = lookupGalileoScore(scorerResults, mapping.galileoName);
       if (rawScore === undefined) {
         metricScores[metric.key] = 0;
+        zeroed.push(metric.key);
         continue;
       }
 
+      sourced.push(metric.key);
       if (mapping.isBuiltIn && mapping.isInverted) {
         metricScores[metric.key] = clamp(1 - rawScore);
       } else {
         metricScores[metric.key] = clamp(rawScore);
       }
     }
+
+    console.log(`Custom eval metric sources — real: [${sourced.join(', ')}], zero: [${zeroed.join(', ')}]`);
+    console.log(`Custom eval Galileo raw scores: ${JSON.stringify(scorerResults)}`);
 
     return { metricScores, traceId: traceName, consoleUrl, scoringSource: "galileo" as const };
   } finally {

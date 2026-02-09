@@ -20,11 +20,12 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { ModelMultiSelect } from "@/components/ModelMultiSelect";
-import { IconPlayerPlay, IconRefresh, IconAlertTriangle, IconInfoCircle, IconPlayerStop, IconX, IconChevronDown } from "@tabler/icons-react";
+import { IconPlayerPlay, IconRefresh, IconAlertTriangle, IconInfoCircle, IconPlayerStop, IconX, IconChevronDown, IconChartBar } from "@tabler/icons-react";
 import { CATEGORY_DISPLAY_NAMES, MAX_ENABLED_MODELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Scenario, ScenarioCategory, ModelRegistryEntry } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useNavigate } from "react-router-dom";
 
 function getGridClass(count: number): string {
   if (count === 1) return "grid-cols-1";
@@ -45,9 +46,12 @@ export function ScenarioRunnerPage() {
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const [activeSessions, setActiveSessions] = useState<Map<string, string>>(new Map());
   const [isRunning, setIsRunning] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const [completedSessionIds, setCompletedSessionIds] = useState<string[]>([]);
   const [backendError, setBackendError] = useState(false);
   const [showCancelAll, setShowCancelAll] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
+  const navigate = useNavigate();
 
   const rawScenarios = useQuery(api.scenarios.list);
   const scenarios: Scenario[] = (rawScenarios as Scenario[] | undefined) ?? [];
@@ -107,7 +111,7 @@ export function ScenarioRunnerPage() {
     setIsRunning(true);
   }, [rawActiveSessions]);
 
-  // Auto-clear panels when all sessions finish (no more active sessions)
+  // Show completion state when all sessions finish (no more active sessions)
   useEffect(() => {
     if (
       isRunning &&
@@ -116,8 +120,9 @@ export function ScenarioRunnerPage() {
       rawActiveSessions !== undefined &&
       rawActiveSessions.length === 0
     ) {
-      setActiveSessions(new Map());
+      setCompletedSessionIds([...activeSessions.values()]);
       setIsRunning(false);
+      setIsComplete(true);
     }
   }, [rawActiveSessions, isRunning, activeSessions.size]);
 
@@ -125,6 +130,8 @@ export function ScenarioRunnerPage() {
     if (!selectedScenarioId || selectedModelIds.length === 0) return;
 
     setIsRunning(true);
+    setIsComplete(false);
+    setCompletedSessionIds([]);
     setActiveSessions(new Map());
     setBackendError(false);
 
@@ -156,7 +163,9 @@ export function ScenarioRunnerPage() {
 
   function handleNewRun() {
     setActiveSessions(new Map());
+    setCompletedSessionIds([]);
     setIsRunning(false);
+    setIsComplete(false);
   }
 
   async function handleCancelSession(sessionId: string) {
@@ -346,6 +355,57 @@ export function ScenarioRunnerPage() {
         </div>
       )}
 
+      {/* Completion banner */}
+      {isComplete && completedSessionIds.length > 0 && (
+        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium text-green-800">
+              <IconChartBar className="h-4 w-4" />
+              Evaluation complete — {completedSessionIds.length} session{completedSessionIds.length > 1 ? "s" : ""} finished
+            </div>
+            <div className="flex items-center gap-2">
+              {completedSessionIds.length === 1 ? (
+                <Button
+                  size="sm"
+                  onClick={() => navigate(`/results/${completedSessionIds[0]}`)}
+                  className="gap-1.5"
+                >
+                  <IconChartBar className="h-3.5 w-3.5" />
+                  View Results
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate("/results")}
+                    className="gap-1.5"
+                  >
+                    <IconChartBar className="h-3.5 w-3.5" />
+                    View All Results
+                  </Button>
+                  {completedSessionIds.map((sid, i) => (
+                    <Button
+                      key={sid}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => navigate(`/results/${sid}`)}
+                      className="text-xs"
+                    >
+                      Session {i + 1}
+                    </Button>
+                  ))}
+                </>
+              )}
+              <Button size="sm" variant="ghost" onClick={handleNewRun} className="gap-1.5">
+                <IconRefresh className="h-3.5 w-3.5" />
+                New Run
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Session display */}
       {activeSessions.size > 0 ? (
         <div
@@ -361,13 +421,13 @@ export function ScenarioRunnerPage() {
             />
           ))}
         </div>
-      ) : (
+      ) : !isComplete ? (
         <div className="py-16 text-center">
           <p className="text-muted-foreground">
             Select a scenario and model(s), then click "Run Evaluation" to start.
           </p>
         </div>
-      )}
+      ) : null}
 
       <ConfirmDialog
         open={showCancelAll}
