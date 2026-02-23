@@ -18,14 +18,16 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from . import __version__
 from .config import get_available_models, get_data_dir, get_model_config, get_results_dir, get_settings
 from .data import load_all
 from .evaluation.callback import get_galileo_callback
 from .evaluation.galileo_eval import evaluate_session, is_galileo_configured
-from .evaluation.metrics import CATEGORIES, CATEGORY_DISPLAY, compute_overall_score
+from .evaluation.metrics import CATEGORIES, CATEGORY_DISPLAY
 from .models import SessionResult
 from .orchestrator.engine import ConversationEngine
 from .reporting.conversation import display_session
+from .reporting.convex_sync import ConvexSyncClient
 from .reporting.export import export_results
 from .reporting.leaderboard import Leaderboard
 
@@ -122,151 +124,236 @@ async def _run_async(
     show_conversation: bool,
 ):
     settings = get_settings()
+    convex_sync = ConvexSyncClient(settings)
+    run_started_at = datetime.now()
+    run_id = run_started_at.strftime("%Y%m%d_%H%M%S")
 
-    # Validate at least one API key
-    if not settings.openai_api_key:
+    try:
+        # Validate at least one API key
+        if not settings.openai_api_key:
+            console.print(
+                "[red]Error: OPENAI_API_KEY is required (used for simulators).[/red]\n"
+                "Set it in python/.env or as an environment variable."
+            )
+            sys.exit(1)
+
+        # Load data
+        data_dir = get_data_dir()
+        personas, tools, all_scenarios = load_all(data_dir)
         console.print(
-            "[red]Error: OPENAI_API_KEY is required (used for simulators).[/red]\n"
-            "Set it in python/.env or as an environment variable."
+            f"Loaded [green]{len(personas)}[/green] personas, "
+            f"[green]{len(tools)}[/green] tools, "
+            f"[green]{len(all_scenarios)}[/green] scenarios"
         )
-        sys.exit(1)
 
-    # Load data
-    data_dir = get_data_dir()
-    personas, tools, all_scenarios = load_all(data_dir)
-    console.print(
-        f"Loaded [green]{len(personas)}[/green] personas, "
-        f"[green]{len(tools)}[/green] tools, "
-        f"[green]{len(all_scenarios)}[/green] scenarios"
-    )
+        # Resolve models
+        if models:
+            model_configs = []
+            for mid in models:
+                cfg = get_model_config(mid)
+                if cfg is None:
+                    console.print(f"[red]Unknown model: {mid}[/red]")
+                    sys.exit(1)
+                model_configs.append(cfg)
+        else:
+            model_configs = get_available_models(settings)
 
-    # Resolve models
-    if models:
-        model_configs = []
-        for mid in models:
-            cfg = get_model_config(mid)
-            if cfg is None:
-                console.print(f"[red]Unknown model: {mid}[/red]")
-                sys.exit(1)
-            model_configs.append(cfg)
-    else:
-        model_configs = get_available_models(settings)
+        if not model_configs:
+            console.print("[red]No models available. Configure API keys in .env.[/red]")
+            sys.exit(1)
 
-    if not model_configs:
-        console.print("[red]No models available. Configure API keys in .env.[/red]")
-        sys.exit(1)
+        console.print(
+            f"Models: {', '.join(f'[cyan]{m.model_id}[/cyan]' for m in model_configs)}"
+        )
 
-    console.print(
-        f"Models: {', '.join(f'[cyan]{m.model_id}[/cyan]' for m in model_configs)}"
-    )
+        # Resolve scenarios
+        if not scenarios or "all" in scenarios:
+            selected_scenarios = list(range(len(all_scenarios)))
+        else:
+            selected_scenarios = [int(s) for s in scenarios]
 
-    # Resolve scenarios
-    if not scenarios or "all" in scenarios:
-        selected_scenarios = list(range(len(all_scenarios)))
-    else:
-        selected_scenarios = [int(s) for s in scenarios]
+        # Filter by category
+        if category:
+            selected_scenarios = [
+                i for i in selected_scenarios if all_scenarios[i].category == category
+            ]
+            console.print(f"Category filter: [yellow]{CATEGORY_DISPLAY[category]}[/yellow]")
 
-    # Filter by category
-    if category:
-        selected_scenarios = [
-            i for i in selected_scenarios if all_scenarios[i].category == category
-        ]
-        console.print(f"Category filter: [yellow]{CATEGORY_DISPLAY[category]}[/yellow]")
+        if not selected_scenarios:
+            console.print("[red]No scenarios match the given filters.[/red]")
+            sys.exit(1)
 
-    if not selected_scenarios:
-        console.print("[red]No scenarios match the given filters.[/red]")
-        sys.exit(1)
+        console.print(f"Scenarios: [green]{len(selected_scenarios)}[/green]")
+        total_sessions = len(model_configs) * len(selected_scenarios)
+        console.print(f"Total sessions: [bold]{total_sessions}[/bold]")
 
-    console.print(f"Scenarios: [green]{len(selected_scenarios)}[/green]")
-    total_sessions = len(model_configs) * len(selected_scenarios)
-    console.print(f"Total sessions: [bold]{total_sessions}[/bold]")
+        # Galileo status
+        if galileo_enabled and is_galileo_configured():
+            console.print(f"Galileo: [green]Enabled[/green] ({settings.galileo_project})")
+        elif galileo_enabled:
+            console.print("[yellow]Galileo: API key not configured — scoring disabled[/yellow]")
+            galileo_enabled = False
+        else:
+            console.print("Galileo: [dim]Disabled[/dim]")
 
-    # Galileo status
-    if galileo_enabled and is_galileo_configured():
-        console.print(f"Galileo: [green]Enabled[/green] ({settings.galileo_project})")
-    elif galileo_enabled:
-        console.print("[yellow]Galileo: API key not configured — scoring disabled[/yellow]")
-        galileo_enabled = False
-    else:
-        console.print("Galileo: [dim]Disabled[/dim]")
+        if convex_sync.enabled:
+            console.print(f"Convex Sync: [green]Enabled[/green] ({settings.convex_python_ingest_url})")
+        elif settings.convex_python_ingest_url or settings.convex_python_ingest_token:
+            console.print(
+                "Convex Sync: [yellow]Disabled — set both CONVEX_PYTHON_INGEST_URL "
+                "and CONVEX_PYTHON_INGEST_TOKEN[/yellow]"
+            )
+        else:
+            console.print("Convex Sync: [dim]Disabled[/dim]")
 
-    console.print()
+        console.print()
 
-    # Setup callbacks
-    callbacks = []
-    if galileo_enabled:
-        cb = get_galileo_callback()
-        if cb:
-            callbacks.append(cb)
+        # Setup callbacks
+        callbacks = []
+        if galileo_enabled:
+            cb = get_galileo_callback()
+            if cb:
+                callbacks.append(cb)
 
-    # Create engine
-    engine = ConversationEngine(tools=tools, callbacks=callbacks)
+        # Create engine
+        engine = ConversationEngine(tools=tools, callbacks=callbacks)
 
-    # Run sessions
-    all_results: list[SessionResult] = []
-    completed = 0
+        # Run sessions
+        all_results: list[SessionResult] = []
+        completed = 0
+        session_seq = 0
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Running evaluations...", total=total_sessions)
+        def build_run_payload(
+            status: str,
+            completed_at: datetime | None = None,
+            last_error: str | None = None,
+        ) -> dict:
+            completed_sessions = len([r for r in all_results if r.status == "completed"])
+            failed_sessions = len(
+                [r for r in all_results if r.status in ("failed", "timeout", "cancelled")]
+            )
+            return {
+                "runId": run_id,
+                "status": status,
+                "models": [m.model_id for m in model_configs],
+                "scenarioCount": len(selected_scenarios),
+                "totalSessions": total_sessions,
+                "completedSessions": completed_sessions,
+                "failedSessions": failed_sessions,
+                "galileoEnabled": galileo_enabled,
+                "startedAt": int(run_started_at.timestamp() * 1000),
+                "completedAt": int(completed_at.timestamp() * 1000) if completed_at else None,
+                "lastError": last_error,
+                "sourceVersion": __version__,
+            }
 
-        for model_config in model_configs:
-            for scenario_idx in selected_scenarios:
-                scenario = all_scenarios[scenario_idx]
-                persona = personas[scenario.persona_index]
+        await convex_sync.sync_run(build_run_payload("running"))
 
-                progress.update(
-                    task,
-                    description=(
-                        f"[{completed + 1}/{total_sessions}] "
-                        f"{model_config.model_id} | {scenario.title[:40]}..."
-                    ),
-                )
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Running evaluations...", total=total_sessions)
 
-                result = await engine.run_session(
-                    scenario=scenario,
-                    persona=persona,
-                    model_config=model_config,
-                )
+            for model_config in model_configs:
+                for scenario_idx in selected_scenarios:
+                    scenario = all_scenarios[scenario_idx]
+                    persona = personas[scenario.persona_index]
 
-                # Evaluate with Galileo if enabled
-                if galileo_enabled and result.status == "completed":
-                    result = await evaluate_session(result)
-                elif result.status == "completed":
-                    # Without Galileo, score is 0
-                    result.overall_score = 0
+                    progress.update(
+                        task,
+                        description=(
+                            f"[{completed + 1}/{total_sessions}] "
+                            f"{model_config.model_id} | {scenario.title[:40]}..."
+                        ),
+                    )
 
-                all_results.append(result)
-                completed += 1
-                progress.advance(task)
+                    result = await engine.run_session(
+                        scenario=scenario,
+                        persona=persona,
+                        model_config=model_config,
+                    )
 
-                # Show conversation if requested
-                if show_conversation:
-                    display_session(result)
+                    # Evaluate with Galileo if enabled
+                    if galileo_enabled and result.status == "completed":
+                        result = await evaluate_session(result)
+                    elif result.status == "completed":
+                        # Without Galileo, score is 0
+                        result.overall_score = 0
 
-                # Quick status line
-                status_icon = "[green]OK[/green]" if result.status == "completed" else "[red]FAIL[/red]"
-                score_str = f" | Score: {result.overall_score:.3f}" if result.metrics else ""
-                console.print(
-                    f"  {status_icon} {model_config.model_id} | "
-                    f"{scenario.title[:50]}{score_str}"
-                )
+                    all_results.append(result)
+                    session_seq += 1
+                    completed += 1
+                    progress.advance(task)
 
-    # Display leaderboard
-    console.print()
-    leaderboard = Leaderboard()
-    leaderboard.add_results(all_results)
-    leaderboard.display()
+                    await convex_sync.sync_session(
+                        run_payload=build_run_payload("running"),
+                        result=result,
+                        session_key=f"session-{session_seq:04d}",
+                    )
 
-    # Export results
-    output_dir = Path(output) if output else get_results_dir()
-    console.print()
-    console.print("[bold]Exporting results...[/bold]")
-    run_id = export_results(all_results, output_dir)
-    console.print(f"\nRun ID: [bold]{run_id}[/bold]")
+                    # Show conversation if requested
+                    if show_conversation:
+                        display_session(result)
+
+                    # Quick status line
+                    status_icon = (
+                        "[green]OK[/green]"
+                        if result.status == "completed"
+                        else "[red]FAIL[/red]"
+                    )
+                    score_str = f" | Score: {result.overall_score:.3f}" if result.metrics else ""
+                    console.print(
+                        f"  {status_icon} {model_config.model_id} | "
+                        f"{scenario.title[:50]}{score_str}"
+                    )
+
+        # Display leaderboard
+        console.print()
+        leaderboard = Leaderboard()
+        leaderboard.add_results(all_results)
+        rankings = leaderboard.get_rankings()
+        leaderboard.display()
+
+        final_status = (
+            "failed"
+            if all_results and all(r.status != "completed" for r in all_results)
+            else "completed"
+        )
+        final_payload = build_run_payload(
+            status=final_status,
+            completed_at=datetime.now(),
+        )
+        await convex_sync.sync_leaderboard(final_payload, rankings)
+        await convex_sync.sync_run(final_payload)
+
+        # Export results
+        output_dir = Path(output) if output else get_results_dir()
+        console.print()
+        console.print("[bold]Exporting results...[/bold]")
+        export_results(all_results, output_dir, run_id=run_id)
+        console.print(f"\nRun ID: [bold]{run_id}[/bold]")
+    except Exception as exc:
+        await convex_sync.sync_run(
+            {
+                "runId": run_id,
+                "status": "failed",
+                "models": list(models),
+                "scenarioCount": 0,
+                "totalSessions": 0,
+                "completedSessions": 0,
+                "failedSessions": 1,
+                "galileoEnabled": galileo_enabled,
+                "startedAt": int(run_started_at.timestamp() * 1000),
+                "completedAt": int(datetime.now().timestamp() * 1000),
+                "lastError": str(exc),
+                "sourceVersion": __version__,
+            }
+        )
+        raise
+    finally:
+        await convex_sync.close()
 
 
 # ---------------------------------------------------------------------------

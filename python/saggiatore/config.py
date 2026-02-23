@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Simulator model (cheap, fast model for persona + tool simulation)
     simulator_model: str = "gpt-4o-mini"
 
+    # Optional: Convex ingestion endpoint for syncing Python SDK runs to web UI
+    convex_python_ingest_url: str = ""
+    convex_python_ingest_token: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

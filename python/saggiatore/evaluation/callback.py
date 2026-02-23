@@ -1,7 +1,7 @@
 """Galileo callback for automatic LangChain tracing.
 
 When Galileo is configured, this provides a GalileoCallback that auto-captures
-LLM invocations, tool calls, and traces during AgentExecutor runs.
+LLM invocations, tool calls, and traces during LangChain agent runs.
 """
 
 from __future__ import annotations

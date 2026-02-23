@@ -13,7 +13,7 @@ is framework-agnostic.
 ```
 CLI (Click + Rich)
         |
-   LangChain AgentExecutor
+   LangChain create_agent Graph
         |
    +-----------+----------+-----------+
    |           |          |           |
@@ -40,7 +40,7 @@ Both implementations read from the same `data/` directory at the repo root:
 | File | Records | Description |
 |------|---------|-------------|
 | `data/personas.json` | 30 | Immigration clients with diverse backgrounds |
-| `data/tools.json` | 30 | Simulated immigration API tools |
+| `data/tools.json` | 32 | Simulated immigration API tools |
 | `data/scenarios.json` | 25 | Evaluation scenarios across 5 categories |
 
 ## Setup
@@ -74,6 +74,8 @@ Optional:
 - `OPENROUTER_API_KEY` — For Claude Sonnet 4.5 via OpenRouter
 - `GROQ_API_KEY` — For Llama 3.3 via Groq
 - `GALILEO_API_KEY` — For Galileo evaluation scoring
+- `CONVEX_PYTHON_INGEST_URL` — Convex HTTP ingest endpoint (for web UI sync)
+- `CONVEX_PYTHON_INGEST_TOKEN` — Shared bearer token for ingest auth
 
 ## Usage
 
@@ -150,7 +152,7 @@ Without Galileo, evaluations run but produce zero scores.
 
 | Aspect | TypeScript | Python |
 |--------|-----------|--------|
-| Framework | Raw fetch + manual loop | LangChain AgentExecutor |
+| Framework | Raw fetch + manual loop | LangChain create_agent graph |
 | Backend | Convex (cloud DB) | JSON files (local) |
 | Frontend | React + Vite | CLI + Rich terminal |
 | Tool handling | Manual parsing | LangChain automatic |

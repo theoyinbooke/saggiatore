@@ -11,9 +11,11 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Sequence
+from typing import Any
 
 from ..config import get_settings
-from ..models import ConversationMessage, EvalMetrics, SessionResult
+from ..models import SessionResult
 from .metrics import compute_overall_score, generate_failure_analysis, map_galileo_scores
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,27 @@ EXPECTED_METRIC_KEYS = [
     "completenessGpt",
     "empathy",
 ]
+
+
+def _extract_numeric_metrics(metrics_obj: Any) -> dict[str, float]:
+    """Extract numeric scorer fields from Galileo metric payloads."""
+    if metrics_obj is None:
+        return {}
+
+    if hasattr(metrics_obj, "to_dict"):
+        raw = metrics_obj.to_dict()
+    elif isinstance(metrics_obj, dict):
+        raw = metrics_obj
+    elif hasattr(metrics_obj, "items"):
+        raw = dict(metrics_obj.items())
+    else:
+        return {}
+
+    return {
+        str(k): float(v)
+        for k, v in raw.items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
 
 
 def is_galileo_configured() -> bool:
@@ -61,23 +84,61 @@ async def evaluate_session(result: SessionResult) -> SessionResult:
         return result
 
     try:
-        # Import Galileo SDK (optional dependency)
-        from galileo import GalileoLogger, get_log_stream, get_project, get_traces, init
+        # Import Galileo SDK symbols (supports both older and newer package layouts)
+        use_legacy_init = False
+        trace_filters: Sequence[Any] | None = None
+        try:
+            from galileo import (
+                GalileoLogger,
+                get_log_stream,
+                get_project,
+                get_traces,
+                init,
+            )
+
+            use_legacy_init = True
+            trace_filters = [
+                {
+                    "columnId": "name",
+                    "operator": "eq",
+                    "value": "",
+                    "type": "text",
+                }
+            ]
+        except ImportError:
+            from galileo import GalileoLogger
+            from galileo.log_streams import get_log_stream
+            from galileo.projects import get_project
+            from galileo.resources.models import (
+                LogRecordsTextFilter,
+                LogRecordsTextFilterOperator,
+            )
+            from galileo.search import get_traces
+
+            init = None
+            trace_filters = [
+                LogRecordsTextFilter(
+                    column_id="name",
+                    operator=LogRecordsTextFilterOperator.EQ,
+                    value="",
+                )
+            ]
 
         # Set API key
         os.environ["GALILEO_API_KEY"] = settings.galileo_api_key
 
-        # Initialize Galileo project
-        await asyncio.to_thread(
-            init,
-            project_name=settings.galileo_project,
-            log_stream=settings.galileo_log_stream,
-        )
+        # Initialize Galileo project (legacy SDK path)
+        if use_legacy_init and init is not None:
+            await asyncio.to_thread(
+                init,
+                project_name=settings.galileo_project,
+                log_stream=settings.galileo_log_stream,
+            )
 
         # Create logger
         galileo_logger = GalileoLogger(
-            project_name=settings.galileo_project,
-            log_stream_name=settings.galileo_log_stream,
+            project=settings.galileo_project,
+            log_stream=settings.galileo_log_stream,
         )
 
         # Start session
@@ -166,11 +227,20 @@ async def evaluate_session(result: SessionResult) -> SessionResult:
         )
 
         # Poll for scorer results
+        if trace_filters:
+            # Inject trace name into whichever filter object shape is active.
+            f0 = trace_filters[0]
+            if isinstance(f0, dict):
+                f0["value"] = trace_name
+            else:
+                setattr(f0, "value", trace_name)
+
         scorer_results = await _poll_for_scores(
             get_traces_fn=get_traces,
             project_id=project.id,
             log_stream_id=log_stream.id if log_stream else None,
             trace_name=trace_name,
+            trace_filters=trace_filters,
         )
 
         if scorer_results:
@@ -219,6 +289,7 @@ async def _poll_for_scores(
     project_id: str,
     log_stream_id: str | None,
     trace_name: str,
+    trace_filters: Sequence[Any] | None = None,
 ) -> dict[str, float] | None:
     """Poll Galileo API for scorer results.
 
@@ -230,30 +301,30 @@ async def _poll_for_scores(
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
         try:
+            filters = list(trace_filters) if trace_filters is not None else [
+                {
+                    "columnId": "name",
+                    "operator": "eq",
+                    "value": trace_name,
+                    "type": "text",
+                }
+            ]
+
             trace_results = await asyncio.to_thread(
                 get_traces_fn,
                 project_id=project_id,
                 log_stream_id=log_stream_id,
-                filters=[
-                    {
-                        "columnId": "name",
-                        "operator": "eq",
-                        "value": trace_name,
-                        "type": "text",
-                    }
-                ],
+                filters=filters,
                 limit=1,
             )
 
-            records = getattr(trace_results, "records", None) or []
+            records = getattr(trace_results, "records", None)
+            if not isinstance(records, list):
+                records = []
             trace = records[0] if records else None
 
             if trace and hasattr(trace, "metrics") and trace.metrics:
-                numeric_metrics = {
-                    k: v
-                    for k, v in trace.metrics.items()
-                    if isinstance(v, (int, float))
-                }
+                numeric_metrics = _extract_numeric_metrics(trace.metrics)
 
                 if not numeric_metrics:
                     continue

@@ -1,7 +1,7 @@
-"""Conversation engine — runs multi-turn evaluation sessions using LangChain AgentExecutor.
+"""Conversation engine — runs multi-turn evaluation sessions using LangChain agents.
 
-Replaces the hand-rolled conversation loop in orchestrator.ts with LangChain's
-AgentExecutor for the agent's turn, while keeping the outer persona-agent loop.
+Uses LangChain's `create_agent` graph API (v1.x) for the agent's turn while
+keeping the outer persona-agent simulation loop.
 """
 
 from __future__ import annotations
@@ -9,14 +9,13 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from typing import Any
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ..models import (
     ConversationMessage,
-    EvalMetrics,
     ModelConfig,
     Persona,
     Scenario,
@@ -31,16 +30,57 @@ from .tool_simulator import create_simulated_tools
 logger = logging.getLogger(__name__)
 
 
+def _stringify_content(content: Any) -> str:
+    """Normalize LangChain message content into plain text for logging/output."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                parts.append(text if isinstance(text, str) else json.dumps(item, default=str))
+            else:
+                parts.append(str(item))
+        return "\n".join(p for p in parts if p).strip()
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _normalize_tool_calls(raw_tool_calls: list[dict] | None, turn_number: int) -> list[dict]:
+    """Map LangChain tool calls to the SessionResult schema."""
+    if not raw_tool_calls:
+        return []
+
+    normalized: list[dict] = []
+    for idx, tc in enumerate(raw_tool_calls, start=1):
+        call_id = tc.get("id") or f"call_{tc.get('name', 'tool')}_{turn_number}_{idx}"
+        args = tc.get("args", tc.get("arguments", {}))
+        if isinstance(args, str):
+            args_json = args
+        else:
+            args_json = json.dumps(args, default=str)
+        normalized.append(
+            {
+                "id": str(call_id),
+                "name": tc.get("name", "unknown"),
+                "arguments": args_json,
+            }
+        )
+    return normalized
+
+
 class ConversationEngine:
     """Runs simulated multi-turn conversations for agent evaluation.
 
     Three actors (same as JS implementation):
     1. Persona simulator (gpt-4o-mini) — plays the immigration client
-    2. Agent under test (the model being evaluated) — via LangChain AgentExecutor
+    2. Agent under test (the model being evaluated) — via LangChain create_agent
     3. Tool simulator (gpt-4o-mini) — generates fake API responses
 
     The outer loop (persona turn -> agent turn -> persona turn) is managed here.
-    LangChain's AgentExecutor handles the agent's internal tool-call sub-loop.
+    LangChain's agent graph handles the internal tool-call sub-loop.
     """
 
     def __init__(self, tools: list[ToolDefinition], callbacks: list | None = None):
@@ -58,7 +98,7 @@ class ConversationEngine:
         Flow (mirrors orchestrator.ts runConversation):
         1. Build agent system prompt with tool list
         2. Create LangChain tools from tool definitions
-        3. Create AgentExecutor with the model under test
+        3. Create LangChain agent graph with the model under test
         4. Create persona simulator
         5. Generate initial persona message
         6. Loop: agent responds -> persona responds -> repeat
@@ -85,51 +125,20 @@ class ConversationEngine:
                 )
             )
 
-            # Create LangChain agent with tool support
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", agent_system_prompt),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ])
-
-            if model_config.supports_tools and simulated_tools:
-                agent = create_openai_tools_agent(
-                    llm=agent_llm,
-                    tools=simulated_tools,
-                    prompt=prompt,
-                )
-                executor = AgentExecutor(
-                    agent=agent,
-                    tools=simulated_tools,
-                    verbose=False,
-                    max_iterations=5,
-                    handle_parsing_errors=True,
-                    return_intermediate_steps=True,
-                    callbacks=self.callbacks,
-                )
-            else:
-                # For models without tool support, use a simple chain
-                agent = create_openai_tools_agent(
-                    llm=agent_llm,
-                    tools=[],
-                    prompt=prompt,
-                )
-                executor = AgentExecutor(
-                    agent=agent,
-                    tools=[],
-                    verbose=False,
-                    max_iterations=1,
-                    handle_parsing_errors=True,
-                    return_intermediate_steps=True,
-                    callbacks=self.callbacks,
-                )
+            # Create LangChain agent graph (v1.x API)
+            agent_tools = simulated_tools if model_config.supports_tools else []
+            agent_graph = create_agent(
+                model=agent_llm,
+                tools=agent_tools,
+                system_prompt=agent_system_prompt,
+            )
 
             # Create persona simulator
             persona_sim = PersonaSimulator(persona, scenario, simulator_llm)
 
             # Conversation state
-            chat_history: list[BaseMessage] = []
+            chat_history: list = []
+            agent_messages: list = []
             turn_number = 1
             max_turns = scenario.max_turns
 
@@ -152,45 +161,73 @@ class ConversationEngine:
 
             while turn_number <= max_turns:
                 # Agent responds (LangChain handles tool calls internally)
-                result = await executor.ainvoke(
-                    {
-                        "input": current_input,
-                        "chat_history": chat_history,
-                    },
+                agent_messages.append(HumanMessage(content=current_input))
+                submitted_len = len(agent_messages)
+
+                invoke_config: dict[str, Any] = {"recursion_limit": 25}
+                if self.callbacks:
+                    invoke_config["callbacks"] = self.callbacks
+
+                result_state = await agent_graph.ainvoke(
+                    {"messages": agent_messages},
+                    config=invoke_config,
                 )
+                result_messages = result_state.get("messages", [])
+                if not isinstance(result_messages, list):
+                    raise ValueError("LangChain agent returned invalid messages payload.")
 
-                agent_response = result.get("output", "")
+                # Keep full agent state for the next turn
+                agent_messages = list(result_messages)
 
-                # Log any intermediate tool calls
-                for step in result.get("intermediate_steps", []):
-                    action, observation = step
+                # Capture only new agent/tool messages from this turn
+                new_messages = result_messages[submitted_len:]
+                agent_response = ""
+
+                for msg in new_messages:
+                    if isinstance(msg, AIMessage):
+                        content = _stringify_content(msg.content)
+                        normalized_calls = _normalize_tool_calls(
+                            getattr(msg, "tool_calls", None),
+                            turn_number=turn_number,
+                        )
+                        if content or normalized_calls:
+                            messages_log.append(
+                                ConversationMessage(
+                                    role="assistant",
+                                    content=content,
+                                    turn_number=turn_number,
+                                    tool_calls=normalized_calls or None,
+                                )
+                            )
+                        if content:
+                            agent_response = content
+                    elif isinstance(msg, ToolMessage):
+                        messages_log.append(
+                            ConversationMessage(
+                                role="tool",
+                                content=_stringify_content(msg.content),
+                                turn_number=turn_number,
+                                tool_call_id=getattr(msg, "tool_call_id", None),
+                            )
+                        )
+
+                if not agent_response:
+                    # Fallback to latest AI message content if this turn had only tool calls
+                    for msg in reversed(result_messages):
+                        if isinstance(msg, AIMessage):
+                            agent_response = _stringify_content(msg.content)
+                            if agent_response:
+                                break
+
+                if not agent_response:
+                    agent_response = "I need a moment to process that."
                     messages_log.append(
                         ConversationMessage(
                             role="assistant",
-                            content="",
+                            content=agent_response,
                             turn_number=turn_number,
-                            tool_calls=[{
-                                "id": f"call_{action.tool}_{turn_number}",
-                                "name": action.tool,
-                                "arguments": json.dumps(action.tool_input, default=str),
-                            }],
                         )
                     )
-                    messages_log.append(
-                        ConversationMessage(
-                            role="tool",
-                            content=str(observation),
-                            turn_number=turn_number,
-                            tool_call_id=f"call_{action.tool}_{turn_number}",
-                        )
-                    )
-
-                # Log agent's final text response
-                messages_log.append(
-                    ConversationMessage(
-                        role="assistant", content=agent_response, turn_number=turn_number
-                    )
-                )
 
                 # Update chat history
                 chat_history.append(HumanMessage(content=current_input))
@@ -201,17 +238,7 @@ class ConversationEngine:
                     break
 
                 # Persona responds
-                persona_msg = await persona_sim.generate_response(
-                    # Build flat message list for persona
-                    [
-                        msg
-                        for pair in zip(
-                            [HumanMessage(content=m.content) for m in messages_log if m.role == "user"],
-                            [AIMessage(content=m.content) for m in messages_log if m.role == "assistant" and m.content],
-                        )
-                        for msg in pair
-                    ]
-                )
+                persona_msg = await persona_sim.generate_response(chat_history)
 
                 messages_log.append(
                     ConversationMessage(

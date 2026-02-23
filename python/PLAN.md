@@ -117,7 +117,7 @@ The Python implementation reads the **same JSON files** from the repo root `data
 | File | Records | Description |
 |------|---------|-------------|
 | `data/personas.json` | 30 personas | Immigration clients with diverse backgrounds |
-| `data/tools.json` | 30 tools | Immigration-domain API tool definitions |
+| `data/tools.json` | 32 tools | Immigration-domain API tool definitions |
 | `data/scenarios.json` | 25 scenarios | Evaluation scenarios across 5 categories |
 
 These files are NOT duplicated. The Python `loader.py` reads from `../../data/` relative
@@ -996,7 +996,7 @@ saggiatore list-scenarios
 
 The Python implementation is considered complete when:
 
-1. Same 30 personas, 30 tools, 25 scenarios loaded from shared `data/` files
+1. Same 30 personas, 32 tools, 25 scenarios loaded from shared `data/` files
 2. Same agent system prompt and persona prompts as JS version
 3. Same 3 LLM providers supported (OpenAI, OpenRouter, Groq)
 4. LangChain AgentExecutor handles agent reasoning + tool calling

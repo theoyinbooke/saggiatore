@@ -127,6 +127,56 @@ export interface LeaderboardEntry {
   lastUpdated: number;
 }
 
+export interface PythonRun {
+  _id: string;
+  runId: string;
+  status: "running" | "completed" | "failed";
+  models: string[];
+  scenarioCount: number;
+  totalSessions: number;
+  completedSessions: number;
+  failedSessions: number;
+  galileoEnabled: boolean;
+  startedAt: number;
+  completedAt?: number;
+  lastError?: string;
+  sourceVersion?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PythonSession {
+  _id: string;
+  runId: string;
+  sessionKey: string;
+  scenarioTitle: string;
+  scenarioCategory: string;
+  modelId: string;
+  personaName: string;
+  status: SessionStatus;
+  totalTurns: number;
+  overallScore: number;
+  metrics?: EvaluationMetrics;
+  failureAnalysis?: string[];
+  galileoTraceId?: string;
+  galileoConsoleUrl?: string;
+  startedAt?: number;
+  completedAt?: number;
+  updatedAt: number;
+}
+
+export interface PythonMessage {
+  _id: string;
+  runId: string;
+  sessionKey: string;
+  role: MessageRole;
+  content: string;
+  turnNumber: number;
+  toolCalls?: ToolCall[];
+  toolCallId?: string;
+  timestamp: number;
+}
+
 export interface ModelRegistryEntry {
   _id: string;
   modelId: string;

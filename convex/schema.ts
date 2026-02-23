@@ -311,6 +311,149 @@ export default defineSchema({
     .index("by_evaluationId", ["evaluationId"])
     .index("by_evaluationId_modelId", ["evaluationId", "modelId"]),
 
+  // ============================================
+  // Python SDK Ingestion Tables
+  // ============================================
+
+  pythonRuns: defineTable({
+    runId: v.string(),
+    status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed")),
+    models: v.array(v.string()),
+    scenarioCount: v.number(),
+    totalSessions: v.number(),
+    completedSessions: v.number(),
+    failedSessions: v.number(),
+    galileoEnabled: v.boolean(),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    sourceVersion: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_status", ["status"])
+    .index("by_startedAt", ["startedAt"]),
+
+  pythonSessions: defineTable({
+    runId: v.string(),
+    sessionKey: v.string(),
+    scenarioTitle: v.string(),
+    scenarioCategory: v.string(),
+    modelId: v.string(),
+    personaName: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("timeout"),
+      v.literal("cancelled")
+    ),
+    totalTurns: v.number(),
+    overallScore: v.number(),
+    metrics: v.optional(v.object({
+      toolAccuracy: v.number(),
+      empathy: v.number(),
+      factualCorrectness: v.number(),
+      completeness: v.number(),
+      safetyCompliance: v.number(),
+    })),
+    failureAnalysis: v.optional(v.array(v.string())),
+    galileoTraceId: v.optional(v.string()),
+    galileoConsoleUrl: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_runId_sessionKey", ["runId", "sessionKey"])
+    .index("by_modelId", ["modelId"]),
+
+  pythonMessages: defineTable({
+    runId: v.string(),
+    sessionKey: v.string(),
+    role: v.union(
+      v.literal("system"),
+      v.literal("user"),
+      v.literal("assistant"),
+      v.literal("tool")
+    ),
+    content: v.string(),
+    turnNumber: v.number(),
+    toolCalls: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          arguments: v.string(),
+        })
+      )
+    ),
+    toolCallId: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_runId_sessionKey", ["runId", "sessionKey"])
+    .index("by_runId_sessionKey_turnNumber", ["runId", "sessionKey", "turnNumber"]),
+
+  pythonEvaluations: defineTable({
+    runId: v.string(),
+    sessionKey: v.string(),
+    modelId: v.string(),
+    scenarioCategory: v.string(),
+    overallScore: v.number(),
+    metrics: v.object({
+      toolAccuracy: v.number(),
+      empathy: v.number(),
+      factualCorrectness: v.number(),
+      completeness: v.number(),
+      safetyCompliance: v.number(),
+    }),
+    categoryScores: v.optional(
+      v.object({
+        visa_application: v.optional(v.number()),
+        status_change: v.optional(v.number()),
+        family_immigration: v.optional(v.number()),
+        deportation_defense: v.optional(v.number()),
+        humanitarian: v.optional(v.number()),
+      })
+    ),
+    failureAnalysis: v.optional(v.array(v.string())),
+    galileoTraceId: v.optional(v.string()),
+    galileoConsoleUrl: v.optional(v.string()),
+    evaluatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_runId_sessionKey", ["runId", "sessionKey"])
+    .index("by_runId_modelId", ["runId", "modelId"]),
+
+  pythonLeaderboard: defineTable({
+    runId: v.string(),
+    rank: v.number(),
+    modelId: v.string(),
+    overallScore: v.number(),
+    totalEvaluations: v.number(),
+    metrics: v.object({
+      toolAccuracy: v.number(),
+      empathy: v.number(),
+      factualCorrectness: v.number(),
+      completeness: v.number(),
+      safetyCompliance: v.number(),
+    }),
+    categoryScores: v.object({
+      visa_application: v.number(),
+      status_change: v.number(),
+      family_immigration: v.number(),
+      deportation_defense: v.number(),
+      humanitarian: v.number(),
+    }),
+    updatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_runId_rank", ["runId", "rank"])
+    .index("by_runId_modelId", ["runId", "modelId"]),
+
   modelRegistry: defineTable({
     modelId: v.string(),
     displayName: v.string(),

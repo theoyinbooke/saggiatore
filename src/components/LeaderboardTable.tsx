@@ -17,6 +17,7 @@ interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
   sortMetric?: MetricKey | "overall";
   filterCategory?: ScenarioCategory | null;
+  linkToResults?: boolean;
 }
 
 /** Resolve the primary score for an entry given the active filters. */
@@ -37,6 +38,7 @@ export function LeaderboardTable({
   entries,
   sortMetric = "overall",
   filterCategory = null,
+  linkToResults = true,
 }: LeaderboardTableProps) {
   const navigate = useNavigate();
 
@@ -69,8 +71,12 @@ export function LeaderboardTable({
           return (
             <TableRow
               key={entry._id}
-              className="cursor-pointer"
-              onClick={() => navigate(`/results?model=${entry.modelId}`)}
+              className={linkToResults ? "cursor-pointer" : undefined}
+              onClick={
+                linkToResults
+                  ? () => navigate(`/results?model=${entry.modelId}`)
+                  : undefined
+              }
             >
               <TableCell className="font-medium">{i + 1}</TableCell>
               <TableCell>

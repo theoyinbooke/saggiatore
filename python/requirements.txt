@@ -1,6 +1,6 @@
-langchain>=0.3.0
-langchain-openai>=0.3.0
-langchain-community>=0.3.0
+langchain>=1.0.0,<2.0.0
+langchain-openai>=1.0.0,<2.0.0
+langchain-community>=0.4.0,<1.0.0
 galileo>=1.0.0
 pydantic>=2.0
 pydantic-settings>=2.0

@@ -26,7 +26,7 @@ def test_load_personas(data_dir):
 
 def test_load_tools(data_dir):
     tools = load_tools(data_dir)
-    assert len(tools) == 30
+    assert len(tools) == 32
     assert tools[0].name == "check_visa_eligibility"
     assert tools[0].category == "eligibility"
 
