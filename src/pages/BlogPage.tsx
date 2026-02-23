@@ -22,9 +22,9 @@ const BLOG_ARTICLES: Record<
 > = {
   web: {
     content: webBlogContent,
-    title: "How We Integrated Galileo SDK in a Real-Time Web App",
+    title: "Implementing Galileo-Powered Agent Evaluation in a Real-Time Web Stack",
     subtitle:
-      "A practical implementation guide for wiring Galileo scoring into a Convex-powered web evaluation app, with Saggiatore as the reference.",
+      "A step-by-step build guide for Convex orchestration, Galileo scoring, and live replay/leaderboard UX",
   },
   python: {
     content: pythonBlogContent,

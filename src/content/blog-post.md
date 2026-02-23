@@ -1,4 +1,4 @@
-## Integrating Galileo SDK in a Real-Time Web Evaluation App
+## Implementing Galileo-Powered Agent Evaluation in a Real-Time Web Stack
 
 In this guide, we'll show you how to integrate Galileo SDK into a real-time web application, using Saggiatore as the working example.
 
