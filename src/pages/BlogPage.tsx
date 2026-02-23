@@ -2,18 +2,47 @@ import { useMemo, useState, useEffect } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeRaw from "rehype-raw"
-import blogContent from "@/content/blog-post.md?raw"
+import webBlogContent from "@/content/blog-post.md?raw"
+import pythonBlogContent from "@/content/blog-post-python.md?raw"
 import { BlogHeader } from "@/components/blog/BlogHeader"
 import { TableOfContents, slugify } from "@/components/blog/TableOfContents"
 import type { TocEntry } from "@/components/blog/TableOfContents"
 import { markdownComponents } from "@/components/blog/MarkdownComponents"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+type BlogTab = "web" | "python"
+
+const BLOG_ARTICLES: Record<
+  BlogTab,
+  {
+    content: string
+    title: string
+    subtitle: string
+  }
+> = {
+  web: {
+    content: webBlogContent,
+    title: "How We Integrated Galileo SDK in a Real-Time Web App",
+    subtitle:
+      "A practical implementation guide for wiring Galileo scoring into a Convex-powered web evaluation app, with Saggiatore as the reference.",
+  },
+  python: {
+    content: pythonBlogContent,
+    title: "Building a Reliable Immigration Consultation AI Agent with Galileo SDK",
+    subtitle:
+      "A hands-on Python implementation guide: LangChain orchestration, Galileo tracing and scoring, and Convex sync using Saggiatore as the working example.",
+  },
+}
 
 export function BlogPage() {
+  const [activeTab, setActiveTab] = useState<BlogTab>("web")
+  const activeArticle = BLOG_ARTICLES[activeTab]
+
   const headings = useMemo<TocEntry[]>(() => {
     const result: TocEntry[] = []
     const regex = /^(#{2,3})\s+(.+)$/gm
     let match
-    while ((match = regex.exec(blogContent)) !== null) {
+    while ((match = regex.exec(activeArticle.content)) !== null) {
       result.push({
         level: match[1].length,
         text: match[2],
@@ -21,9 +50,13 @@ export function BlogPage() {
       })
     }
     return result
-  }, [])
+  }, [activeArticle.content])
 
   const [activeSlug, setActiveSlug] = useState("")
+
+  useEffect(() => {
+    setActiveSlug("")
+  }, [activeTab])
 
   useEffect(() => {
     const elements = headings
@@ -49,7 +82,22 @@ export function BlogPage() {
 
   return (
     <article className="py-8">
-      <BlogHeader content={blogContent} />
+      <BlogHeader
+        content={activeArticle.content}
+        title={activeArticle.title}
+        subtitle={activeArticle.subtitle}
+      />
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as BlogTab)}
+        className="mb-6"
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="web">Web Integration</TabsTrigger>
+          <TabsTrigger value="python">Python Integration</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex gap-10">
         {/* Sticky sidebar TOC — hidden on smaller screens */}
@@ -66,7 +114,7 @@ export function BlogPage() {
             rehypePlugins={[rehypeRaw]}
             components={markdownComponents}
           >
-            {blogContent}
+            {activeArticle.content}
           </Markdown>
         </div>
       </div>
